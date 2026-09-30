@@ -70,19 +70,19 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
       <div ref={parentRef} className="aspect-video w-full overflow-hidden rounded-xl bg-[#1e2a24] shadow-2xl" />
 
       {/* HUD */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4 text-white drop-shadow">
-        <div className="space-y-1">
-          <div className="text-sm opacity-80">
+      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 text-white">
+        <div className="space-y-1 rounded-lg bg-black/55 px-3 py-2 backdrop-blur-sm">
+          <div className="text-sm text-zinc-200">
             Kapitola {chapter} · {ch?.name} · kolo {round}
           </div>
-          <div className="text-2xl" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
+          <div className="text-2xl text-red-500" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
             {"❤".repeat(hud?.lives ?? 0)}
-            <span className="opacity-30">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
+            <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
           </div>
         </div>
-        <div className="text-right">
+        <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
           <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
-          <div className="text-sm opacity-80">
+          <div className="text-sm text-zinc-200">
             zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
           </div>
         </div>

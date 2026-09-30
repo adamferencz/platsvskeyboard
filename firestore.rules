@@ -150,7 +150,8 @@ service cloud.firestore {
     // ---------- známky ----------
 
     match /grades/{gradeId} {
-      allow read: if isAllowed() && (isOwner(resource.data.uid) || isTeacher());
+      // id = uid_rok; get funguje i pro neexistující dokument (resource je tam null)
+      allow get: if isAllowed() && (gradeId == request.auth.uid + '_' + gradeId.split('_')[1] || isTeacher());
       allow list: if isTeacher();
       // student žádá; pokud dokument existuje, jen když není zamčený
       allow create: if isAllowed() && isOwner(request.resource.data.uid)

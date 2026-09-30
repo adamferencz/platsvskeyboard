@@ -24,7 +24,7 @@ const W = 1280;
 const H = 720;
 const LANES = 4;
 const LANE_TOP = 150;
-const LANE_H = 120;
+const LANE_H = 142;
 const HOUSE_X = 130;
 const SPAWN_X = W + 60;
 
@@ -127,7 +127,8 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.drawBackground();
-    this.add.image(HOUSE_X - 70, LANE_TOP + LANES * LANE_H, TEX.house).setOrigin(0.5, 1).setScale(1.1).setDepth(1);
+    const house = this.add.image(-10, LANE_TOP + LANES * LANE_H + 4, TEX.house).setOrigin(0, 1).setDepth(1);
+    house.setScale(Math.min(250 / house.width, (LANES * LANE_H) / house.height));
 
     const title = this.add
       .text(W / 2, H / 2 - 40, `${chapter.name}\nkolo ${this.data_.round}`, {
@@ -138,7 +139,8 @@ export class LevelScene extends Phaser.Scene {
         stroke: "#000000",
         strokeThickness: 6,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(100);
     const hint = this.add
       .text(W / 2, H / 2 + 50, "Piš písmena na zombících. Začni psát…", {
         fontFamily: "system-ui, sans-serif",
@@ -147,7 +149,8 @@ export class LevelScene extends Phaser.Scene {
         stroke: "#000000",
         strokeThickness: 4,
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(100);
 
     this.input_ = new TypingInput(this.data_.parent, {
       onChar: (ch, t) => this.onChar(ch, t),
@@ -182,6 +185,18 @@ export class LevelScene extends Phaser.Scene {
 
   private drawBackground() {
     this.ground = this.add.graphics();
+    if (this.textures.exists(TEX.background)) {
+      // pozadí má 4 pruhy trávníku od ~23 % výšky dolů; napasujeme je na naše dráhy
+      const img = this.textures.get(TEX.background).getSourceImage() as HTMLImageElement;
+      const lanesTopRatio = 0.235;
+      const s = (LANES * LANE_H) / (img.height * (1 - lanesTopRatio));
+      this.add
+        .image(0, LANE_TOP - img.height * lanesTopRatio * s, TEX.background)
+        .setOrigin(0, 0)
+        .setDisplaySize(W, img.height * s)
+        .setDepth(0);
+      return;
+    }
     const colors = [0x4a7c59, 0x3e6b4c];
     for (let i = 0; i < LANES; i++) {
       this.ground.fillStyle(colors[i % 2], 1);
@@ -228,10 +243,15 @@ export class LevelScene extends Phaser.Scene {
   private addZombie(kind: ZombieKind, word: string, queue: string[]) {
     const lane = this.pickLane();
     const y = LANE_TOP + lane * LANE_H + LANE_H - 6;
-    const texKey = { basic: TEX.zombieBasic, fast: TEX.zombieFast, armored: TEX.zombieArmored, boss: TEX.boss }[kind];
+    const texKey =
+      kind === "basic"
+        ? Math.random() < 0.5 && this.textures.exists(TEX.zombieStudent)
+          ? TEX.zombieStudent
+          : TEX.zombieBasic
+        : { fast: TEX.zombieFast, armored: TEX.zombieArmored, boss: TEX.boss }[kind];
     const sprite = this.add.image(0, 0, texKey).setOrigin(0.5, 1);
     // jednotná výška postav bez ohledu na rozlišení zdrojového obrázku
-    const targetH = { basic: 88, fast: 76, armored: 96, boss: 170 }[kind];
+    const targetH = { basic: 112, fast: 98, armored: 124, boss: 210 }[kind];
     sprite.setScale(targetH / sprite.height);
     const fontSize = kind === "boss" ? 40 : 30;
     const style = {
@@ -447,8 +467,9 @@ export class LevelScene extends Phaser.Scene {
     const counts = Array.from({ length: LANES }, (_, i) => this.zombies.filter((z) => !z.dead && z.lane === i).length);
     const lane = counts.indexOf(Math.max(...counts));
     const y = LANE_TOP + lane * LANE_H + LANE_H - 6;
-    const sprite = this.add.image(HOUSE_X + 60, y, TEX.tower).setOrigin(0.5, 1).setDepth(5);
-    this.tweens.add({ targets: sprite, scale: { from: 0, to: 1 }, duration: 250, ease: "Back.out" });
+    const sprite = this.add.image(HOUSE_X + 70, y, TEX.tower).setOrigin(0.5, 1).setDepth(5);
+    const towerScale = 78 / sprite.height;
+    this.tweens.add({ targets: sprite, scale: { from: 0, to: towerScale }, duration: 250, ease: "Back.out" });
     this.towers.push({ lane, sprite, expiresAt: this.time.now + 20000, nextShotAt: this.time.now + 800 });
     this.score += 50;
   }
@@ -465,7 +486,7 @@ export class LevelScene extends Phaser.Scene {
         .sort((a, b) => a.container.x - b.container.x)[0];
       if (!target) continue;
       tw.nextShotAt = this.time.now + 2500;
-      const bullet = this.add.image(tw.sprite.x, tw.sprite.y - 50, TEX.bullet).setDepth(20);
+      const bullet = this.add.image(tw.sprite.x + 20, tw.sprite.y - tw.sprite.displayHeight * 0.65, TEX.bullet).setDepth(20);
       this.tweens.add({
         targets: bullet,
         x: target.container.x,
