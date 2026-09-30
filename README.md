@@ -23,6 +23,19 @@ npm run audit -- --days 7      # označí podezřelé běhy podle logu úhozů
 npm run deploy:rules           # firestore.rules + indexy do projektu plants-vs-keyboard
 ```
 
+## Jak přispívat
+
+Vyvíjí se na větvích, do `main` jde všechno přes pull request. Před novou větví se ujisti, že vycházíš z aktuálního `main`:
+
+```bash
+git checkout main && git pull --ff-only origin main
+git checkout -b feat/nazev-zmeny
+# … práce, npm run typecheck && npm run build …
+git push -u origin feat/nazev-zmeny   # a otevři PR na GitHubu
+```
+
+Podrobná pravidla (názvy větví, review, nasazení pravidel) jsou v `CLAUDE.md`.
+
 ## Jak je to poskládané
 
 ```text
