@@ -1,0 +1,31 @@
+{
+  "indexes": [
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "bestNetCpm", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "courseCompletion", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "totalScore", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "totalMinutes", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "classId", "order": "ASCENDING" }, { "fieldPath": "bestNetCpm", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "classId", "order": "ASCENDING" }, { "fieldPath": "courseCompletion", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "classId", "order": "ASCENDING" }, { "fieldPath": "totalScore", "order": "DESCENDING" } ] },
+    { "collectionGroup": "stats", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "classId", "order": "ASCENDING" }, { "fieldPath": "totalMinutes", "order": "DESCENDING" } ] },
+    { "collectionGroup": "grades", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "schoolYear", "order": "ASCENDING" }, { "fieldPath": "requestedAt", "order": "DESCENDING" } ] },
+    { "collectionGroup": "runs", "queryScope": "COLLECTION", "fields": [
+      { "fieldPath": "uid", "order": "ASCENDING" }, { "fieldPath": "startedAt", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "runs",
+      "fieldPath": "keystrokes",
+      "indexes": []
+    }
+  ]
+}

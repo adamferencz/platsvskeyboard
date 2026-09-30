@@ -1,0 +1,178 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- kdo je kdo ----------
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function email() {
+      return request.auth.token.email.lower();
+    }
+
+    function provider() {
+      return request.auth.token.firebase.sign_in_provider;
+    }
+
+    // Školní účet: e-mail @ghb.cz. Heslový účet musí mít ověřený e-mail;
+    // Microsoft (fáze 2) e-mail ověřený nevrací, tam stačí provider (aplikace je single-tenant).
+    function isSchool() {
+      return signedIn()
+        && email().matches('.*@ghb[.]cz$')
+        && (provider() == 'microsoft.com'
+            || provider() == 'google.com'
+            || (provider() == 'password' && request.auth.token.email_verified == true));
+    }
+
+    function staffDoc() {
+      return get(/databases/$(database)/documents/allowedUsers/$(email()));
+    }
+
+    function isStaff() {
+      return signedIn() && exists(/databases/$(database)/documents/allowedUsers/$(email()));
+    }
+
+    function isTeacher() {
+      return isStaff() && staffDoc().data.role in ['teacher', 'admin'];
+    }
+
+    function isAdmin() {
+      return isStaff() && staffDoc().data.role == 'admin';
+    }
+
+    function isAllowed() {
+      return isSchool() || isStaff();
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // ---------- whitelist učitelů a výjimek ----------
+
+    match /allowedUsers/{mail} {
+      allow get: if signedIn() && mail == email();
+      allow list: if isTeacher();
+      allow write: if isAdmin();
+    }
+
+    // ---------- uživatelé ----------
+
+    match /users/{uid} {
+      allow read: if isAllowed() && (isOwner(uid) || isTeacher());
+      allow create: if isAllowed() && isOwner(uid)
+        && request.resource.data.email == email();
+      allow update: if isAllowed() && isOwner(uid)
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['displayName', 'track', 'gradYear', 'layout', 'lastActiveAt']);
+    }
+
+    // ---------- postup v kurzu ----------
+
+    match /progress/{uid} {
+      allow read: if isAllowed() && (isOwner(uid) || isTeacher());
+      allow create: if isAllowed() && isOwner(uid) && progressValid(null);
+      allow update: if isAllowed() && isOwner(uid) && progressValid(resource.data);
+    }
+
+    function progressValid(prev) {
+      let d = request.resource.data;
+      return d.courseCompletion is number && d.courseCompletion >= 0 && d.courseCompletion <= 100
+        && d.bestCpm is number && d.bestCpm >= 0 && d.bestCpm <= 900
+        && d.bestNetCpm is number && d.bestNetCpm >= 0 && d.bestNetCpm <= 900
+        && d.totalRuns is int && d.totalRuns >= 0
+        && d.unlockedChapter is int && d.unlockedChapter >= 1 && d.unlockedChapter <= 22
+        && (prev == null || (
+             d.courseCompletion >= prev.courseCompletion
+             && d.totalRuns == prev.totalRuns + 1
+             && d.bestCpm >= prev.bestCpm
+             && d.totalMinutes >= prev.totalMinutes
+        ));
+    }
+
+    // ---------- běhy (jen zápis nového, nikdy změna) ----------
+
+    match /runs/{runId} {
+      allow read: if isAllowed() && (isOwner(resource.data.uid) || isTeacher());
+      allow create: if isAllowed() && isOwner(request.resource.data.uid) && runValid();
+      // učitel může běh anulovat (podezření)
+      allow update: if isTeacher()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voided', 'suspicious']);
+      allow delete: if false;
+    }
+
+    function runValid() {
+      let d = request.resource.data;
+      return d.levelId is string
+        && d.durationMs is number && d.durationMs >= 3000 && d.durationMs <= 3600000
+        && d.cpm is number && d.cpm >= 0 && d.cpm <= 900
+        && d.netCpm is number && d.netCpm >= 0 && d.netCpm <= d.cpm
+        && d.accuracy is number && d.accuracy >= 0 && d.accuracy <= 100
+        && d.score is number && d.score >= 0 && d.score <= 100000
+        && d.stars is int && d.stars >= 0 && d.stars <= 3
+        && d.correct is int && d.correct >= 0
+        && d.errors is int && d.errors >= 0
+        // hrubé úhozy/min musí odpovídat počtu správných znaků a délce (±5 %)
+        && d.cpm <= (d.correct * 60000 / d.durationMs) * 1.05 + 1
+        && d.keystrokes is list && d.keystrokes.size() <= 8000;
+    }
+
+    // ---------- statistiky pro žebříčky ----------
+
+    match /stats/{statId} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && isOwner(request.resource.data.uid)
+        && statId == request.resource.data.uid + '_' + request.resource.data.schoolYear
+        && statsValid(null);
+      allow update: if isAllowed() && isOwner(resource.data.uid) && statsValid(resource.data);
+    }
+
+    function statsValid(prev) {
+      let d = request.resource.data;
+      return d.bestCpm is number && d.bestCpm >= 0 && d.bestCpm <= 900
+        && d.bestNetCpm is number && d.bestNetCpm >= 0 && d.bestNetCpm <= 900
+        && d.courseCompletion is number && d.courseCompletion >= 0 && d.courseCompletion <= 100
+        && d.totalScore is number && d.totalScore >= 0
+        && d.runs is int && d.runs >= 1
+        && (prev == null || (
+             d.uid == prev.uid
+             && d.schoolYear == prev.schoolYear
+             && d.runs == prev.runs + 1
+             && d.bestCpm >= prev.bestCpm
+             && d.courseCompletion >= prev.courseCompletion
+        ));
+    }
+
+    // ---------- známky ----------
+
+    match /grades/{gradeId} {
+      allow read: if isAllowed() && (isOwner(resource.data.uid) || isTeacher());
+      allow list: if isTeacher();
+      // student žádá; pokud dokument existuje, jen když není zamčený
+      allow create: if isAllowed() && isOwner(request.resource.data.uid)
+        && request.resource.data.status == 'requested'
+        && request.resource.data.locked == false
+        && request.resource.data.gradeOffered >= 1 && request.resource.data.gradeOffered <= 5;
+      allow update: if
+        // student obnoví zamítnutou / nezamčenou žádost
+        (isAllowed() && isOwner(resource.data.uid) && resource.data.locked == false
+          && request.resource.data.status == 'requested' && request.resource.data.locked == false)
+        // učitel zapíše nebo zamítne
+        || (isTeacher() && resource.data.locked == false
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'recordedBy', 'recordedAt', 'subject', 'locked']));
+      allow delete: if false;
+    }
+
+    // ---------- konfigurace ----------
+
+    match /config/{docId} {
+      allow read: if isAllowed();
+      allow write: if isAdmin();
+    }
+  }
+}
