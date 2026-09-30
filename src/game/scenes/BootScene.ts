@@ -9,6 +9,7 @@ export const TEX = {
   zombieStudent: "zombie-student",
   zombieFast: "zombie-fast",
   zombieArmored: "zombie-armored",
+  zombieJanitor: "zombie-janitor",
   boss: "zombie-boss",
   tower: "tower",
   house: "house",
@@ -27,7 +28,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image(TEX.zombieBasic, "/game/zombie-teacher.png");
     this.load.image(TEX.zombieStudent, "/game/zombie-student@320.png");
     this.load.image(TEX.zombieFast, "/game/zombie-fast@320.png");
-    this.load.image(TEX.zombieArmored, "/game/zombie-armored@320.png");
+    this.load.image(TEX.zombieArmored, "/game/zombie-zelva@320.png"); // zombie želva z inboxu (kouká doprava, ve hře se zrcadlí)
+    this.load.image(TEX.zombieJanitor, "/game/zombie-armored@320.png");
     this.load.image(TEX.boss, "/game/boss-reditel@320.png");
     this.load.image(TEX.tower, "/game/tower-keyboard-plant@320.png");
     this.load.image(TEX.house, "/game/house@320.png");
