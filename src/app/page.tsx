@@ -22,8 +22,10 @@ export default function HomePage() {
 function Landing() {
   return (
     <div className="py-16 text-center">
-      <div className="mb-4 text-6xl" aria-hidden>
-        🧟‍♂️⌨️🌱
+      <div className="mb-4 flex items-end justify-center gap-6" aria-hidden>
+        <img src="/game/zombie-teacher.png" alt="" className="h-40 w-auto" />
+        <img src="/game/zombie-zelva@320.png" alt="" className="h-32 w-auto -scale-x-100" />
+        <img src="/game/tower-keyboard-plant@320.png" alt="" className="h-28 w-auto" />
       </div>
       <h1 className="mb-3 text-4xl font-bold">Plants vs. Keyboard</h1>
       <p className="mx-auto mb-8 max-w-xl text-zinc-300">

@@ -60,7 +60,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
       <footer className="border-t border-white/10 py-4 text-center text-xs text-zinc-500">
-        Gymnázium Havlíčkův Brod · projekt studentů a učitelů IVT · školní rok {new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1}/
+        <img src="/game/zombie-zelva@320.png" alt="" aria-hidden className="mx-auto mb-2 h-12 w-auto opacity-80" />
+        Gymnázium Havlíčkův Brod · studenti IT semináře a učitel Adam Ferencz · školní rok{" "}
+        {new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1}/
         {String((new Date().getMonth() >= 8 ? new Date().getFullYear() + 1 : new Date().getFullYear()) % 100).padStart(2, "0")}
       </footer>
     </div>
