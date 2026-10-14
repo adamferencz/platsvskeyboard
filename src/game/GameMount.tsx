@@ -12,6 +12,8 @@ interface Props {
   round: number;
   keyStats: Record<string, KeyStat>;
   playerCpm: number;
+  zenMode?: boolean;
+  zenSpeed?: number;
   onFinished: (result: RunResult) => void;
   onExit: () => void;
 }
@@ -20,7 +22,7 @@ interface Props {
  * Obal Phaseru pro React: vytvoří hru v useEffect, zničí ji při odmountování.
  * HUD kreslí React nad canvasem podle událostí z mostu (max. 5× za sekundu).
  */
-export default function GameMount({ chapter, round, keyStats, playerCpm, onFinished, onExit }: Props) {
+export default function GameMount({ chapter, round, keyStats, playerCpm, zenMode, zenSpeed, onFinished, onExit }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
@@ -47,6 +49,8 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
         keyStats,
         playerCpm,
         parent: parentRef.current,
+        zenMode,
+        zenSpeed,
       });
     })();
 
@@ -59,9 +63,9 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-    // hra se vytváří jednou pro danou úroveň; keyStats/playerCpm se čtou jen při startu
+    // hra se vytváří jednou pro danou úroveň a režim; keyStats/playerCpm se čtou jen při startu
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapter, round]);
+  }, [chapter, round, zenMode, zenSpeed]);
 
   const ch = chapterById(chapter);
 
@@ -74,16 +78,28 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
         <div className="space-y-1 rounded-lg bg-black/55 px-3 py-2 backdrop-blur-sm">
           <div className="text-sm text-zinc-200">
             Kapitola {chapter} · {ch?.name} · kolo {round}
+            {zenMode && (
+              <span className="ml-2 inline-flex items-center rounded bg-emerald-700/80 px-1.5 py-0.5 text-xs font-semibold text-emerald-100">
+                🧘 Zen
+              </span>
+            )}
           </div>
-          <div className="text-2xl text-red-500" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
-            {"❤".repeat(hud?.lives ?? 0)}
-            <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
-          </div>
+          {zenMode ? (
+            <div className="text-xs font-medium text-emerald-400">
+              Klidný režim · bez časového stresu
+            </div>
+          ) : (
+            <div className="text-2xl text-red-500" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
+              {"❤".repeat(hud?.lives ?? 0)}
+              <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
+            </div>
+          )}
         </div>
         <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
           <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
           <div className="text-sm text-zinc-200">
             zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
+            {zenMode && <span className="ml-1 text-xs text-zinc-400">(trénink)</span>}
           </div>
         </div>
       </div>
