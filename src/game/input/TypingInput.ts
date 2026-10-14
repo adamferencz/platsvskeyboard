@@ -18,6 +18,7 @@ export class TypingInput {
   private handlers: TypingHandlers;
   private composing = false;
   private disposed = false;
+  private capturing = true;
 
   constructor(container: HTMLElement, handlers: TypingHandlers) {
     this.handlers = handlers;
@@ -50,24 +51,43 @@ export class TypingInput {
   }
 
   focus = () => {
-    if (!this.disposed) this.el.focus({ preventScroll: true });
+    if (!this.disposed && this.capturing) this.el.focus({ preventScroll: true });
   };
 
   private refocusSoon = () => {
-    setTimeout(this.focus, 0);
+    if (this.capturing && !this.disposed) {
+      setTimeout(this.focus, 0);
+    }
   };
 
+  disableCapture() {
+    this.capturing = false;
+    this.el.blur();
+  }
+
+  enableCapture() {
+    this.capturing = true;
+    this.focus();
+  }
+
+  isCapturing(): boolean {
+    return this.capturing && !this.disposed;
+  }
+
   private onCompStart = () => {
+    if (!this.capturing) return;
     this.composing = true;
   };
 
   private onCompEnd = (e: CompositionEvent) => {
+    if (!this.capturing) return;
     this.composing = false;
     this.emitText(e.data ?? "");
     this.el.value = "";
   };
 
   private onInput = (e: Event) => {
+    if (!this.capturing) return;
     const ev = e as InputEvent;
     if (this.composing || ev.isComposing) return;
     if (ev.inputType === "insertText" || ev.inputType === "insertFromPaste") {
@@ -78,7 +98,7 @@ export class TypingInput {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (e.isComposing) return;
+    if (!this.capturing || e.isComposing) return;
     if (e.key === "Backspace") {
       e.preventDefault();
       this.handlers.onBackspace?.(performance.now());

@@ -14,13 +14,22 @@ interface Props {
   playerCpm: number;
   onFinished: (result: RunResult) => void;
   onExit: () => void;
+  resultOverlay?: React.ReactNode;
 }
 
 /**
  * Obal Phaseru pro React: vytvoří hru v useEffect, zničí ji při odmountování.
  * HUD kreslí React nad canvasem podle událostí z mostu (max. 5× za sekundu).
  */
-export default function GameMount({ chapter, round, keyStats, playerCpm, onFinished, onExit }: Props) {
+export default function GameMount({
+  chapter,
+  round,
+  keyStats,
+  playerCpm,
+  onFinished,
+  onExit,
+  resultOverlay,
+}: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
@@ -108,6 +117,8 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
           Načítám zombíky…
         </div>
       )}
+
+      {resultOverlay}
     </div>
   );
 }
