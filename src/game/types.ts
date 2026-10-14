@@ -27,6 +27,7 @@ export interface RunResult {
   keyStats: Record<string, KeyStat>;
   /** [t ms od začátku, 1 = správně / 0 = chyba] */
   keystrokes: [number, 0 | 1][];
+  zenMode?: boolean;
 }
 
 export interface HudState {

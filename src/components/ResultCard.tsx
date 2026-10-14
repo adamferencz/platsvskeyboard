@@ -62,6 +62,14 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
         </div>
       </div>
 
+      {result.zenMode && (
+        <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/60 px-3 py-1.5 text-sm font-medium text-emerald-300">
+          <span>🧘</span>
+          <span>Zen trénink (nesoutěžní)</span>
+          <span className="text-xs text-emerald-400/70">· výsledek neovlivňuje žebříček</span>
+        </div>
+      )}
+
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Stat label="Čisté úhozy/min" value={result.netCpm} />
         <Stat label="Hrubé úhozy/min" value={result.cpm} />
