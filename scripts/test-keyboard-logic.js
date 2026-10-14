@@ -1,88 +1,130 @@
 /**
- * Verifikační test pro logiku klávesnice, prstokladu, řazení slabých kláves a heatmapy.
- * Spouští se pomocí: node scripts/test-keyboard-logic.js
+ * Verifikační jednotkový test pro logiku klávesnice, prstokladu, řazení slabých kláves a heatmapy.
+ * Spouští se pomocí: npm run test:keyboard-logic (nebo node scripts/test-keyboard-logic.js)
  */
 
-const assert = require("node:assert");
-const fs = require("node:fs");
 const path = require("node:path");
+const assert = require("node:assert/strict");
+const jiti = require("jiti")(__filename);
 
-console.log("=== Běh testů pro Issue #13 (Heatmapa chybovosti na profilu) ===");
+// Přímý import skutečných exportovaných funkcí a konstant ze src/lib/keyboard.ts
+const {
+  getWeakKeys,
+  findChapterForKey,
+  findKeyDefinition,
+  getKeyFinger,
+  getFingerDisplayName,
+  FINGER_NAMES,
+  FINGER_SHORT_NAMES,
+  getLayout,
+  CZECH_QWERTZ_LAYOUT,
+  CZECH_QWERTY_LAYOUT,
+} = jiti("../src/lib/keyboard.ts");
 
-// 1. Ověření existence klíčových souborů
-const keyboardTsPath = path.join(__dirname, "../src/lib/keyboard.ts");
-const heatmapComponentPath = path.join(__dirname, "../src/components/KeyboardHeatmap.tsx");
-const profilePagePath = path.join(__dirname, "../src/app/profil/page.tsx");
+console.log("=== Běh jednotkových testů pro Issue #13 (Heatmapa chybovosti na profilu) ===");
 
-assert.ok(fs.existsSync(keyboardTsPath), "src/lib/keyboard.ts musí existovat");
-assert.ok(fs.existsSync(heatmapComponentPath), "src/components/KeyboardHeatmap.tsx musí existovat");
-assert.ok(fs.existsSync(profilePagePath), "src/app/profil/page.tsx musí existovat");
-console.log("✓ Všechny požadované soubory existují.");
+// 1. Ověření layoutu a konzistence domovské řady a výstupků
+console.log("1. Ověření layoutu a kláves...");
+const qwertzRows = getLayout("qwertz");
+assert.equal(qwertzRows.length, 5, "Layout musí mít 5 řad");
+const allKeys = qwertzRows.flat();
 
-// 2. Statická verifikace obsahu src/lib/keyboard.ts
-const keyboardTs = fs.readFileSync(keyboardTsPath, "utf8");
-assert.ok(keyboardTs.includes("export type Finger ="), "keyboard.ts musí exportovat typ Finger");
-assert.ok(keyboardTs.includes("CZECH_QWERTZ_LAYOUT"), "keyboard.ts musí definovat CZECH_QWERTZ_LAYOUT");
-assert.ok(keyboardTs.includes("CZECH_QWERTY_LAYOUT"), "keyboard.ts musí definovat CZECH_QWERTY_LAYOUT");
-assert.ok(keyboardTs.includes("getKeyFinger"), "keyboard.ts musí exportovat getKeyFinger");
-assert.ok(keyboardTs.includes("getWeakKeys"), "keyboard.ts musí exportovat getWeakKeys");
-assert.ok(keyboardTs.includes("findChapterForKey"), "keyboard.ts musí exportovat findChapterForKey");
-console.log("✓ src/lib/keyboard.ts obsahuje všechny požadované exporty z Interface Contract.");
+// Domovská řada: přesně 8 kláves (asdf jklů)
+const homeKeys = allKeys.filter((k) => k.home).map((k) => k.key).sort();
+assert.equal(homeKeys.length, 8, "Musí existovat přesně 8 domovských kláves");
+assert.deepEqual(homeKeys, ["a", "d", "f", "j", "k", "l", "s", "ů"].sort(), "Domovské klávesy musí být asdf jklů");
 
-// 3. Statická verifikace KeyboardHeatmap.tsx
-const heatmapTs = fs.readFileSync(heatmapComponentPath, "utf8");
-assert.ok(heatmapTs.includes("bg-emerald-600/80"), "Heatmapa musí obsahovat zelenou barvu pro < 5% chyb");
-assert.ok(heatmapTs.includes("bg-amber-500/80"), "Heatmapa musí obsahovat jantarovou barvu pro 5-20% chyb");
-assert.ok(heatmapTs.includes("bg-rose-600/80"), "Heatmapa musí obsahovat červenou barvu pro > 20% chyb");
-assert.ok(heatmapTs.includes("bg-zinc-800/50"), "Heatmapa musí obsahovat neutrální tmavou barvu pro 0 pokusů");
-assert.ok(heatmapTs.includes("QWERTZ") && heatmapTs.includes("QWERTY"), "Heatmapa musí podporovat obě rozložení");
-assert.ok(heatmapTs.includes("summary"), "Heatmapa musí počítat agregovaný souhrn");
-console.log("✓ src/components/KeyboardHeatmap.tsx splňuje všechny vizuální a funkční požadavky.");
+// Hmatové výstupky: přesně 2 klávesy (f a j)
+const nubKeys = allKeys.filter((k) => k.nub).map((k) => k.key).sort();
+assert.equal(nubKeys.length, 2, "Musí existovat přesně 2 hmatové výstupky");
+assert.deepEqual(nubKeys, ["f", "j"].sort(), "Hmatové výstupky musí být na klávesách F a J");
 
-// 4. Statická verifikace src/app/profil/page.tsx
-const profileTs = fs.readFileSync(profilePagePath, "utf8");
-assert.ok(profileTs.includes("KeyboardHeatmap"), "Profil musí importovat a renderovat KeyboardHeatmap");
-assert.ok(profileTs.includes("Doporučení k procvičení"), "Profil musí obsahovat sekci Doporučení k procvičení");
-assert.ok(profileTs.includes("/hra?c="), "Profil musí odkazovat na cílený trénink v /hra?c=");
-assert.ok(profileTs.includes("Procvičit slabé klávesy"), "Profil musí obsahovat hlavní tlačítko Procvičit slabé klávesy");
-console.log("✓ src/app/profil/page.tsx integruje heatmapu, doporučení a tréninková tlačítka.");
+// 2. QWERTZ vs QWERTY mapování prstů
+console.log("2. Ověření prstokladu pro Z/Y a speciální znaky...");
+assert.equal(getKeyFinger("z", "qwertz"), "right_index");
+assert.equal(getKeyFinger("y", "qwertz"), "left_pinky");
+assert.equal(getKeyFinger("y", "qwerty"), "right_index");
+assert.equal(getKeyFinger("z", "qwerty"), "left_pinky");
+assert.equal(getKeyFinger(" "), "left_thumb");
 
-// 5. Test logiky doporučení nejslabších kláves
-// Simulace keyStats
+// Názvy prstů
+assert.equal(getFingerDisplayName("left_index"), "Levý ukazováček");
+assert.equal(getFingerDisplayName("right_middle"), "Pravý prostředníček");
+assert.equal(FINGER_SHORT_NAMES["left_pinky"], "L. malíček");
+
+// 3. Ověření vyhledávání definice klávesy (findKeyDefinition)
+console.log("3. Ověření findKeyDefinition...");
+const defA = findKeyDefinition("a");
+assert.ok(defA);
+assert.equal(defA.key, "a");
+assert.equal(defA.finger, "left_pinky");
+assert.equal(defA.home, true);
+
+const defPlus = findKeyDefinition("1");
+assert.ok(defPlus);
+assert.equal(defPlus.key, "+");
+assert.equal(defPlus.shiftLabel, "1");
+
+const defSpace = findKeyDefinition(" ");
+assert.ok(defSpace);
+assert.equal(defSpace.label, "Mezerník");
+
+// 4. Ověření mapování kapitol (findChapterForKey)
+console.log("4. Ověření findChapterForKey s curriculum...");
+const chD = findChapterForKey("d");
+assert.equal(chD.id, 1, "'d' musí být představeno v kapitole 1");
+const chA = findChapterForKey("a");
+assert.equal(chA.id, 2, "'a' musí být představeno v kapitole 2");
+const chE = findChapterForKey("e");
+assert.equal(chE.id, 4, "'e' musí být představeno v kapitole 4");
+const chQ = findChapterForKey("q");
+assert.equal(chQ.id, 15, "'q' musí být představeno v kapitole 15");
+
+// 5. Test skutečné funkce getWeakKeys
+console.log("5. Test skutečné analytické funkce getWeakKeys...");
 const mockStats = {
-  a: { hits: 100, misses: 2 }, // 2 % chyby -> nemá být ve slabých (nebo nízká priorita)
-  u: { hits: 10, misses: 5 },  // 5 chyb z 15 -> 33 % chyb
-  k: { hits: 20, misses: 10 }, // 10 chyb z 30 -> 33 % chyb
-  ů: { hits: 2, misses: 8 },   // 8 chyb z 10 -> 80 % chyb (velmi slabá)
-  f: { hits: 50, misses: 0 },  // 0 chyb -> nesmí být ve slabých
-  z: { hits: 1, misses: 1 },   // 2 pokusy celkem -> méně než 3 pokusy, nesmí být zařazena
+  a: { hits: 100, misses: 2 }, // 2 % chyby (102 celkem)
+  u: { hits: 10, misses: 5 },  // 33 % chyby (15 celkem, 5 chyb)
+  k: { hits: 20, misses: 10 }, // 33 % chyby (30 celkem, 10 chyb)
+  ů: { hits: 2, misses: 8 },   // 80 % chyby (10 celkem, 8 chyb) -> nejhorší
+  f: { hits: 50, misses: 0 },  // 0 chyb -> vyloučeno
+  z: { hits: 1, misses: 1 },   // 2 pokusy celkem -> pod minAttempts=3, vyloučeno
+  " ": { hits: 5, misses: 5 }, // 50 % chyby (10 celkem, 5 chyb) -> mezerník
 };
 
-// Extrahovaná testovací logika odpovídající getWeakKeys
-function mockGetWeakKeys(keyStats, limit = 5, minAttempts = 3) {
-  const list = [];
-  for (const [k, stat] of Object.entries(keyStats)) {
-    const hits = stat.hits || 0;
-    const misses = stat.misses || 0;
-    const total = hits + misses;
-    if (total < minAttempts || misses === 0) continue;
-    const errorRate = misses / total;
-    list.push({ key: k, total, misses, errorRate });
-  }
-  list.sort((a, b) => {
-    if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
-    if (b.misses !== a.misses) return b.misses - a.misses;
-    return b.total - a.total;
-  });
-  return list.slice(0, limit);
-}
+const weak = getWeakKeys(mockStats, "qwertz", 5, 3);
+assert.equal(weak.length, 5, "Mělo být vybráno právě 5 slabých kláves");
 
-const weak = mockGetWeakKeys(mockStats);
-assert.strictEqual(weak.length, 4, "Měly být vybrány právě 4 klávesy (f má 0 chyb, z má jen 2 pokusy)");
-assert.strictEqual(weak[0].key, "ů", "Nejslabší klávesa musí být 'ů' s 80 % chybovostí");
-assert.strictEqual(weak[1].key, "k", "Při shodné chybovosti (33 %) rozhoduje vyšší počet chyb ('k' má 10 chyb, 'u' má 5)");
-assert.strictEqual(weak[2].key, "u", "Třetí nejslabší je 'u'");
-assert.strictEqual(weak[3].key, "a", "Poslední je 'a' s 2 % chybovostí");
-console.log("✓ Logika výběru a řazení slabých kláves funguje stoprocentně.");
+// První: 'ů' (80% chyb)
+assert.equal(weak[0].key, "ů");
+assert.equal(weak[0].errorPercent, 80);
+assert.equal(weak[0].finger, "right_pinky");
+assert.equal(weak[0].chapterId, 2);
+assert.equal(weak[0].fingerName, "Pravý malíček");
 
-console.log("\n=== Všechny testy úspěšně proběhly! ===");
+// Druhá: Mezerník ' ' (50% chyb)
+assert.equal(weak[1].key, " ");
+assert.equal(weak[1].displayKey, "Mezerník");
+assert.equal(weak[1].errorPercent, 50);
+
+// Třetí a čtvrtá: shoda chybovosti (33 %), rozhoduje počet chyb (k má 10 chyb, u má 5 chyb)
+assert.equal(weak[2].key, "k");
+assert.equal(weak[2].misses, 10);
+assert.equal(weak[3].key, "u");
+assert.equal(weak[3].misses, 5);
+
+// Pátá: 'a'
+assert.equal(weak[4].key, "a");
+
+// Mezní hodnoty: prázdné statistiky
+assert.deepEqual(getWeakKeys(null), []);
+assert.deepEqual(getWeakKeys(undefined), []);
+assert.deepEqual(getWeakKeys({}), []);
+
+// Omezení počtu (limit)
+const limited = getWeakKeys(mockStats, "qwertz", 2, 3);
+assert.equal(limited.length, 2);
+assert.equal(limited[0].key, "ů");
+assert.equal(limited[1].key, " ");
+
+console.log("\n✓ Všechny jednotkové testy pro Issue #13 úspěšně proběhly bez fasád!");

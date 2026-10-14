@@ -54,7 +54,11 @@ export function KeyboardHeatmap({
           trainedCount++;
           const err = m / t;
           if (t >= 3 && m > 0 && (!worstKey || err > worstKey.errorRate)) {
-            worstKey = { key: k, errorRate: err, label: k.toUpperCase() };
+            worstKey = {
+              key: k,
+              errorRate: err,
+              label: k === " " ? "Mezerník" : k.toUpperCase(),
+            };
           }
         }
       }
@@ -77,7 +81,7 @@ export function KeyboardHeatmap({
   const getKeyStats = (keyDef: KeyDefinition): { stat: KeyStat | null; total: number; errorRate: number; accuracy: number } => {
     if (!keyStats) return { stat: null, total: 0, errorRate: 0, accuracy: 100 };
     const k = keyDef.key.toLowerCase();
-    const alt = keyDef.altKey?.toLowerCase();
+    const alt = (keyDef.altKey ?? keyDef.shiftLabel ?? keyDef.shiftChar)?.toLowerCase();
     const stat = keyStats[k] ?? (alt ? keyStats[alt] : null) ?? null;
 
     if (!stat) return { stat: null, total: 0, errorRate: 0, accuracy: 100 };
@@ -118,7 +122,7 @@ export function KeyboardHeatmap({
   // Aktivní klávesa pro zobrazení detailu (hovered má přednost před vybranou)
   const activeKey = hoveredKey ?? selectedKey;
   const activeStats = activeKey ? getKeyStats(activeKey) : null;
-  const activeChapter = activeKey && !["caps", "shift_l", "shift_r", "ctrl_l", "ctrl_r", "alt_l", "alt_r", "tab", "backspace", "enter"].includes(activeKey.key)
+  const activeChapter = activeKey && !activeKey.special && activeKey.key !== " "
     ? findChapterForKey(activeKey.key)
     : null;
 
@@ -198,20 +202,9 @@ export function KeyboardHeatmap({
       <div className="overflow-x-auto rounded-xl bg-zinc-950/80 p-3.5 border border-white/5 shadow-inner">
         <div className="min-w-[680px] space-y-1.5 select-none font-mono">
           {keyboardRows.map((row, rowIdx) => (
-            <div key={rowIdx} className="flex gap-1.5">
+            <div key={rowIdx} className="flex gap-1.5 justify-center">
               {row.map((keyDef) => {
-                const isFunctional = [
-                  "caps",
-                  "shift_l",
-                  "shift_r",
-                  "ctrl_l",
-                  "ctrl_r",
-                  "alt_l",
-                  "alt_r",
-                  "tab",
-                  "backspace",
-                  "enter",
-                ].includes(keyDef.key);
+                const isFunctional = Boolean(keyDef.special);
 
                 const width = keyDef.width ?? 1.0;
                 const { total, errorRate, accuracy } = getKeyStats(keyDef);
@@ -223,8 +216,8 @@ export function KeyboardHeatmap({
                 const tooltipText = isFunctional
                   ? keyDef.label
                   : total > 0
-                  ? `Klávesa ${keyDef.key.toUpperCase()}: ${accuracy} % úspěšnost (${total} úhozů, ${keyStats?.[keyDef.key]?.misses ?? 0} chyb)`
-                  : `Klávesa ${keyDef.key.toUpperCase()}: Zatím netrénováno`;
+                  ? `Klávesa ${keyDef.key === " " ? "Mezerník" : keyDef.key.toUpperCase()}: ${accuracy} % úspěšnost (${total} úhozů, ${keyStats?.[keyDef.key]?.misses ?? 0} chyb)`
+                  : `Klávesa ${keyDef.key === " " ? "Mezerník" : keyDef.key.toUpperCase()}: Zatím netrénováno`;
 
                 return (
                   <button
@@ -244,11 +237,11 @@ export function KeyboardHeatmap({
                     }`}
                   >
                     <span className="truncate px-1 text-center font-sans font-semibold">
-                      {keyDef.label}
+                      {keyDef.shiftLabel && !keyDef.special ? `${keyDef.shiftLabel} ${keyDef.label}` : keyDef.label}
                     </span>
 
-                    {/* Hmatový výstupek na domovských klávesách F a J */}
-                    {keyDef.home && (
+                    {/* Hmatový výstupek na klávesách F a J */}
+                    {keyDef.nub && (
                       <span className="absolute bottom-1 h-0.5 w-3.5 rounded-full bg-current opacity-80" />
                     )}
 
