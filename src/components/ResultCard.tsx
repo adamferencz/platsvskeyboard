@@ -17,9 +17,20 @@ interface Props {
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
+  className?: string;
 }
 
-export function ResultCard({ result, saving, saveError, suspicious, hasNext, onRetry, onNext, onMap }: Props) {
+export function ResultCard({
+  result,
+  saving,
+  saveError,
+  suspicious,
+  hasNext,
+  onRetry,
+  onNext,
+  onMap,
+  className,
+}: Props) {
   const worst = Object.entries(result.keyStats)
     .filter(([, s]) => s.misses > 0)
     .sort((a, b) => b[1].misses - a[1].misses)
@@ -53,7 +64,7 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
   );
 
   return (
-    <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-white/10 bg-zinc-900 p-6 text-white shadow-2xl">
+    <div className={`mx-auto max-w-xl rounded-2xl border border-white/10 bg-zinc-900 p-6 text-white shadow-2xl ${className ?? "mt-6"}`}>
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{result.won ? "Kolo vyhráno!" : "Zombíci prošli…"}</h2>
         <div className="text-3xl text-yellow-400" aria-label={`${result.stars} hvězdičky`}>

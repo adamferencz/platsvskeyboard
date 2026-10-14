@@ -115,6 +115,8 @@ export class LevelScene extends Phaser.Scene {
     this.bonusTyped = 0;
     this.bonusLock = false;
     this.killsSinceBonus = 0;
+    this.startAt = 0;
+    this.hudTimer = 0;
   }
 
   create() {
@@ -174,7 +176,12 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(3000, startGame);
     this.events.once("first-key", startGame);
 
+    const offRestart = bridge.onTyped("restart-level", () => {
+      this.scene.restart(this.data_);
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offRestart();
       this.input_.dispose();
       this.spawnEvent?.remove();
     });
@@ -554,6 +561,8 @@ export class LevelScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.spawnEvent?.remove();
+    this.input_.disableCapture();
+    this.tweens.pauseAll();
     const durationMs = Math.max(1, Math.round(performance.now() - this.startAt));
     const m = { correct: this.correct, errors: this.errors, durationMs };
     const acc = accuracy(m);
