@@ -10,6 +10,10 @@ export interface BridgeEvents {
   "run-finished": (result: RunResult) => void;
   "level-ready": () => void;
   "exit": () => void;
+  "pause-state": (paused: boolean) => void;
+  "resume-level": () => void;
+  "pause-level": () => void;
+  "restart-level": () => void;
 }
 
 class Bridge extends Phaser.Events.EventEmitter {
