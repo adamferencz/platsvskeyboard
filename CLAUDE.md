@@ -24,6 +24,13 @@ npm run deploy:rules   # firestore.rules + indexy
 - Když je PR v konfliktu, aktualizuj větev z `main` (`git merge origin/main` nebo rebase), nikdy neřeš konflikt force-pushem do `main`.
 - Pravidla Firestore a indexy (`npm run deploy:rules`) nasazuje jen učitel po merge do `main`.
 
+### Co dělá agent (Claude / Codex) sám a co ne
+
+- **Dokončenou práci vždy commitne a pushne** na svou větev, pokud to jde (build prošel, nic není rozbité). Neukončuje úkol s necommitnutými změnami.
+- Po pushi **otevře PR** (`gh pr create`) a **udělá si vlastní review** (`/code-review` nebo `codex review`): projde diff, opraví nálezy, doplní do PR shrnutí, co ověřil.
+- **Merge do `main` dělá jen na výslovný pokyn uživatele.** I když review dopadne dobře, agent napíše „PR je připravený k merge“ a čeká. Bez pokynu nemerguje ani nemaže větev.
+- Nasazení pravidel Firestore a deploy na Vercel jsou taky jen na pokyn.
+
 ## Pravidla pro práci v repu
 
 - **Repo je veřejné.** Secrets jen v `.env.local` (gitignored). Web config Firebase je veřejný identifikátor, ale i tak patří do env. Servisní účet leží v `management-a-zdroje/`, cesta v `GOOGLE_APPLICATION_CREDENTIALS`.
