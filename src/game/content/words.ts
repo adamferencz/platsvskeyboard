@@ -72,15 +72,21 @@ export class WordGenerator {
     return worstScore > 0.08 ? worst : null;
   }
 
-  /** Náhodná pseudo-slabika (CV / CVC / VC) z dostupných písmen. */
+  /** Náhodná pseudo-slabika (CV / CVC / VC) z dostupných písmen bez opakování stejného znaku za sebou. */
   private pseudoWord(len: number): string {
     const vowels = this.letters.filter((l) => VOWELS.has(l));
     const cons = this.letters.filter((l) => !VOWELS.has(l));
     let out = "";
+    let lastCh = "";
     for (let i = 0; i < len; i++) {
       const wantVowel = vowels.length > 0 && (i % 2 === 1 || cons.length === 0);
-      const src = wantVowel ? vowels : cons.length ? cons : this.letters;
-      out += src[Math.floor(this.rng() * src.length)];
+      let src = wantVowel ? vowels : cons.length ? cons : this.letters;
+      if (src.length > 1) {
+        src = src.filter((c) => c !== lastCh);
+      }
+      const ch = src[Math.floor(this.rng() * src.length)];
+      out += ch;
+      lastCh = ch;
     }
     return out;
   }
@@ -116,13 +122,22 @@ export class WordGenerator {
     return word;
   }
 
-  /** Bonusové slovo pro věž — delší než běžný text, jen z odemčených písmen. */
-  bonusWord(): string {
-    const longer = this.opts.words
-      .filter(([w]) => w.length >= 4 && w.length <= 8 && [...w].every((ch) => this.letters.includes(ch)))
+  /** Složitější slovo pro bůst — delší text než běžný zombík, jen z odemčených písmen. */
+  boostWord(): string {
+    const c = this.opts.chapter.id;
+    const minLen = c <= 2 ? 4 : c <= 6 ? 5 : 6;
+    const maxLen = c <= 2 ? 5 : c <= 6 ? 7 : 9;
+    const candidates = this.opts.words
+      .filter(([w]) => w.length >= minLen && w.length <= maxLen && [...w].every((ch) => this.letters.includes(ch)))
       .slice(0, 400);
-    if (longer.length) return longer[Math.floor(this.rng() * longer.length)][0];
-    return this.pseudoWord(4);
+    if (candidates.length > 0) {
+      return candidates[Math.floor(this.rng() * candidates.length)][0];
+    }
+    return this.pseudoWord(minLen);
+  }
+
+  bonusWord(): string {
+    return this.boostWord();
   }
 
   get focus(): string | null {
