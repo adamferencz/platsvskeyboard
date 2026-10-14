@@ -297,6 +297,9 @@ export class LevelScene extends Phaser.Scene {
       dead: false,
     };
     this.layoutLabel(z);
+    if (this.time.now < this.freezeUntil) {
+      sprite.setTint(0x74b9ff);
+    }
     this.zombies.push(z);
 
     // houpání při chůzi (procedurální animace místo snímků)
@@ -438,6 +441,9 @@ export class LevelScene extends Phaser.Scene {
 
   private kill(z: Zombie) {
     z.dead = true;
+    if (this.locked === z) {
+      this.locked = null;
+    }
     this.kills++;
     this.tweens.killTweensOf(z.sprite);
     this.tweens.add({
@@ -639,9 +645,14 @@ export class LevelScene extends Phaser.Scene {
     for (const z of laneZombies) {
       if (Math.abs(z.container.x - bombX) < 260) {
         if (z.kind === "boss") {
-          z.hp = Math.max(1, z.hp - 2);
-          if (z.queue.length > 1) z.queue.splice(0, 2);
-          this.flash(z);
+          z.hp -= 2;
+          if (z.hp <= 0) {
+            this.score += 50;
+            this.kill(z);
+          } else {
+            z.queue.splice(0, Math.min(2, z.queue.length));
+            this.flash(z);
+          }
         } else {
           this.score += 25;
           this.kill(z);
@@ -662,9 +673,11 @@ export class LevelScene extends Phaser.Scene {
     }
 
     this.time.delayedCall(6000, () => {
-      for (const z of this.zombies) {
-        if (!z.dead && z.sprite.active) {
-          z.sprite.clearTint();
+      if (this.time.now >= this.freezeUntil) {
+        for (const z of this.zombies) {
+          if (!z.dead && z.sprite.active) {
+            z.sprite.clearTint();
+          }
         }
       }
     });
@@ -672,6 +685,7 @@ export class LevelScene extends Phaser.Scene {
 
   private healBase() {
     this.lives = Math.min(5, this.lives + 1);
+    this.livesLost = Math.max(0, this.livesLost - 1);
     this.cameras.main.flash(150, 46, 204, 113);
     this.showFloatingText(HOUSE_X + 50, LANE_TOP + LANE_H, "+1 ❤", "#e74c3c");
   }
