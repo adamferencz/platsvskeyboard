@@ -1,13 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Kbd } from "@/components/Kbd";
 import { RequireAuth } from "@/components/RequireAuth";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, levelId } from "@/game/content/curriculum";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getProgress } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { gradeForCompletion } from "@/lib/grading";
+import { useHotkeys } from "@/lib/useHotkeys";
+
+/** První odemčené kolo bez hvězdičky; když je všechno dohrané, poslední kolo kurzu. */
+function nextRound(progress: ProgressDoc | null): { chapter: number; round: number; fresh: boolean } {
+  const unlocked = progress?.unlockedChapter ?? 1;
+  for (const ch of CHAPTERS) {
+    if (ch.id > unlocked) break;
+    for (let r = 1; r <= ROUNDS_PER_CHAPTER; r++) {
+      if ((progress?.levels[levelId(ch.id, r)]?.stars ?? 0) === 0) return { chapter: ch.id, round: r, fresh: true };
+    }
+  }
+  return { chapter: CHAPTERS.length, round: ROUNDS_PER_CHAPTER, fresh: false };
+}
 
 export default function HomePage() {
   const { access } = useAuth();
@@ -20,6 +35,8 @@ export default function HomePage() {
 }
 
 function Landing() {
+  const router = useRouter();
+  useHotkeys({ Enter: () => router.push("/prihlaseni") });
   return (
     <div className="py-16 text-center">
       <div className="mb-4 flex items-end justify-center gap-6" aria-hidden>
@@ -34,6 +51,7 @@ function Landing() {
       </p>
       <Link href="/prihlaseni" className="rounded-lg bg-emerald-600 px-6 py-3 text-lg font-semibold hover:bg-emerald-500">
         Přihlásit se školním účtem
+        <Kbd>Enter</Kbd>
       </Link>
     </div>
   );
@@ -41,13 +59,25 @@ function Landing() {
 
 function LevelMap() {
   const { user } = useAuth();
+  const router = useRouter();
   const [progress, setProgress] = useState<ProgressDoc | null | undefined>(undefined);
+  const continueRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
     if (user) getProgress(user.uid).then(setProgress);
   }, [user]);
 
-  if (progress === undefined) return <p className="py-20 text-center text-zinc-400">Načítám postup…</p>;
+  const loaded = progress !== undefined;
+  const next = nextRound(progress ?? null);
+  const nextHref = `/hra?c=${next.chapter}&r=${next.round}`;
+
+  useEffect(() => {
+    if (loaded) continueRef.current?.focus({ preventScroll: true });
+  }, [loaded]);
+
+  useHotkeys({ Enter: () => router.push(nextHref) }, { enabled: loaded });
+
+  if (!loaded) return <p className="py-20 text-center text-zinc-400">Načítám postup…</p>;
 
   const completion = progress?.courseCompletion ?? 0;
   const unlocked = progress?.unlockedChapter ?? 1;
@@ -78,9 +108,19 @@ function LevelMap() {
               )}
             </p>
           </div>
-          <Link href="/profil" className="text-sm text-emerald-400 hover:underline">
-            Profil a známka →
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href="/profil" className="text-sm text-emerald-400 hover:underline">
+              Profil a známka →
+            </Link>
+            <Link
+              ref={continueRef}
+              href={nextHref}
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 font-semibold hover:bg-emerald-500"
+            >
+              {next.fresh ? "Pokračovat" : "Hrát znovu"}: kapitola {next.chapter}, {next.round === ROUNDS_PER_CHAPTER ? "boss" : `kolo ${next.round}`}
+              <Kbd>Enter</Kbd>
+            </Link>
+          </div>
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-800">
           <div className="h-full bg-emerald-500 transition-all" style={{ width: `${completion}%` }} />

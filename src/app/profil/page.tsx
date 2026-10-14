@@ -88,7 +88,13 @@ function Profile() {
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">
         <h1 className="mb-4 text-xl font-bold">Profil</h1>
-        <div className="space-y-4 text-sm">
+        <form
+          className="space-y-4 text-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save();
+          }}
+        >
           <Field label="E-mail">
             <span className="text-zinc-300">{profile.email}</span>
           </Field>
@@ -115,10 +121,11 @@ function Profile() {
               <option value="qwerty">Česká QWERTY (prohozené Z/Y)</option>
             </select>
           </Field>
-          <button onClick={() => void save()} disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50">
+          <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50">
             Uložit
           </button>
-        </div>
+          <span className="ml-3 text-xs text-zinc-500">Enter v políčku uloží.</span>
+        </form>
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">

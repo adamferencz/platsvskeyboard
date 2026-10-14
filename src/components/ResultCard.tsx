@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { RunResult } from "@/game/types";
+import { useHotkeys } from "@/lib/useHotkeys";
+import { Kbd } from "./Kbd";
 
 interface Props {
   result: RunResult;
@@ -18,6 +21,27 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
     .filter(([, s]) => s.misses > 0)
     .sort((a, b) => b[1].misses - a[1].misses)
     .slice(0, 4);
+
+  const canNext = result.won && hasNext;
+  // Další kolo čeká na uložení — jinak by se další kapitola ještě nemusela odemknout
+  const primary = canNext ? (saving ? null : onNext) : onRetry;
+  const primaryRef = useRef<HTMLButtonElement>(null);
+
+  // fokus na hlavní tlačítko, ať Enter funguje i nativně a Tab začíná u něj
+  useEffect(() => {
+    primaryRef.current?.focus({ preventScroll: true });
+  }, [canNext, saving]);
+
+  // 700 ms rezerva: písmena dopsaná po konci kola nesmí spustit akci
+  useHotkeys(
+    {
+      Enter: () => primary?.(),
+      r: onRetry,
+      Escape: onMap,
+      m: onMap,
+    },
+    { armDelayMs: 700 },
+  );
 
   return (
     <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-white/10 bg-zinc-900 p-6 text-white shadow-2xl">
@@ -60,18 +84,29 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
       {saveError && <p className="mt-3 text-sm text-red-400">Uložení selhalo: {saveError}</p>}
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <button onClick={onRetry} className="rounded-lg bg-zinc-700 px-4 py-2 font-medium hover:bg-zinc-600">
-          Znovu
-        </button>
-        {result.won && hasNext && (
-          <button onClick={onNext} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500">
-            Další kolo →
+        {canNext && (
+          <button
+            ref={primaryRef}
+            onClick={onNext}
+            disabled={saving}
+            className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-60"
+          >
+            Další kolo →<Kbd>Enter</Kbd>
           </button>
         )}
+        <button
+          ref={canNext ? undefined : primaryRef}
+          onClick={onRetry}
+          className={`rounded-lg px-4 py-2 font-medium ${canNext ? "bg-zinc-700 hover:bg-zinc-600" : "bg-emerald-600 hover:bg-emerald-500"}`}
+        >
+          Znovu
+          <Kbd>{canNext ? "R" : "Enter"}</Kbd>
+        </button>
         <button onClick={onMap} className="rounded-lg bg-zinc-800 px-4 py-2 font-medium hover:bg-zinc-700">
-          Mapa
+          Mapa<Kbd>Esc</Kbd>
         </button>
       </div>
+      <p className="mt-3 text-xs text-zinc-500">Tab přepíná tlačítka, Enter potvrdí.</p>
     </div>
   );
 }

@@ -11,6 +11,8 @@ import type { RunResult } from "@/game/types";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getProgress, saveRun } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
+import { useHotkeys } from "@/lib/useHotkeys";
+import { Kbd } from "@/components/Kbd";
 
 const GameMount = dynamic(() => import("@/game/GameMount"), { ssr: false });
 
@@ -61,20 +63,29 @@ function Game() {
     [user, profile],
   );
 
+  const locked = progress !== undefined && chapter > (progress?.unlockedChapter ?? 1);
+  // na chybových stránkách vede Enter i Esc zpět na mapu
+  useHotkeys({ Enter: () => router.push("/"), Escape: () => router.push("/") }, { enabled: !valid || locked });
+
   if (!valid) {
     return (
       <p className="py-20 text-center">
-        Takové kolo neexistuje. <Link href="/" className="text-emerald-400 underline">Zpět na mapu</Link>
+        Takové kolo neexistuje.{" "}
+        <Link href="/" autoFocus className="text-emerald-400 underline">
+          Zpět na mapu<Kbd>Enter</Kbd>
+        </Link>
       </p>
     );
   }
   if (progress === undefined) return <p className="py-20 text-center text-zinc-400">Načítám postup…</p>;
 
-  const locked = chapter > (progress?.unlockedChapter ?? 1);
   if (locked) {
     return (
       <p className="py-20 text-center">
-        Tahle kapitola je ještě zamčená. <Link href="/" className="text-emerald-400 underline">Zpět na mapu</Link>
+        Tahle kapitola je ještě zamčená.{" "}
+        <Link href="/" autoFocus className="text-emerald-400 underline">
+          Zpět na mapu<Kbd>Enter</Kbd>
+        </Link>
       </p>
     );
   }
