@@ -359,7 +359,11 @@ export class LevelScene extends Phaser.Scene {
       z.typed++;
       this.layoutLabel(z);
       this.tweens.add({ targets: z.sprite, scaleX: 0.9, scaleY: 1.08, duration: 60, yoyo: true });
-      if (z.typed >= z.word.length) this.wordDone(z);
+      if (z.typed >= z.word.length) {
+        this.wordDone(z);
+      } else {
+        this.emitHud();
+      }
     } else {
       this.registerKey(expected, false, t);
       this.tweens.add({ targets: z.container, x: z.container.x + 6, duration: 40, yoyo: true, repeat: 2 });
@@ -379,6 +383,7 @@ export class LevelScene extends Phaser.Scene {
       this.layoutLabel(z);
       this.flash(z);
       this.locked = null;
+      this.emitHud();
       return;
     }
     this.kill(z);
@@ -596,6 +601,16 @@ export class LevelScene extends Phaser.Scene {
 
   private emitHud() {
     const boss = this.zombies.find((z) => z.kind === "boss" && !z.dead);
+    const expectedChar = this.finished
+      ? null
+      : this.bonusLock && this.bonusWord
+      ? (this.bonusWord[this.bonusTyped] ?? null)
+      : this.locked && !this.locked.dead
+      ? (this.locked.word[this.locked.typed] ?? null)
+      : (this.zombies
+          .filter((z) => !z.dead)
+          .sort((a, b) => a.container.x - b.container.x)[0]?.word[0] ?? null);
+
     const state: HudState = {
       lives: this.lives,
       score: this.score,
@@ -604,6 +619,7 @@ export class LevelScene extends Phaser.Scene {
       bonusWord: this.bonusWord,
       bonusTyped: this.bonusTyped,
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
+      expectedChar,
     };
     bridge.emitTyped("hud", state);
   }

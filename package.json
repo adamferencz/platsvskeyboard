@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "test:keyboard": "node scripts/test-keyboard.mjs",
     "allow": "node scripts/allow-user.js",
     "status": "node scripts/status.js",
     "audit": "node scripts/audit-runs.js",
