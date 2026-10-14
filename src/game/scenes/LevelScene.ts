@@ -61,6 +61,8 @@ export class LevelScene extends Phaser.Scene {
   private zombies: Zombie[] = [];
   private towers: Tower[] = [];
   private locked: Zombie | null = null;
+  private crosshair!: Phaser.GameObjects.Container;
+  private lastBackspaceTime = 0;
   private spawned = 0;
   private bossSpawned = false;
   private finished = false;
@@ -99,6 +101,7 @@ export class LevelScene extends Phaser.Scene {
     this.zombies = [];
     this.towers = [];
     this.locked = null;
+    this.lastBackspaceTime = 0;
     this.spawned = 0;
     this.bossSpawned = false;
     this.finished = false;
@@ -154,8 +157,10 @@ export class LevelScene extends Phaser.Scene {
 
     this.input_ = new TypingInput(this.data_.parent, {
       onChar: (ch, t) => this.onChar(ch, t),
+      onBackspace: () => this.onBackspace(),
       onEscape: () => this.exit(),
     });
+    this.createCrosshair();
 
     const startGame = () => {
       if (this.started) return;
@@ -339,7 +344,7 @@ export class LevelScene extends Phaser.Scene {
       .filter((z) => !z.dead && z.word[0] === ch)
       .sort((a, b) => a.container.x - b.container.x)[0];
     if (target) {
-      this.locked = target;
+      this.setLocked(target);
       this.hit(target, ch, t);
       return;
     }
@@ -350,6 +355,135 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
     this.miss(ch, t);
+  }
+
+  private onBackspace() {
+    if (this.finished || !this.started) return;
+    const now = performance.now();
+    const isDoubleTap = now - this.lastBackspaceTime < 350;
+    this.lastBackspaceTime = now;
+
+    if (this.locked && !this.locked.dead) {
+      if (isDoubleTap) {
+        // Okamžité zrušení uzamčení při dvojstisku Backspace
+        this.locked.typed = 0;
+        this.layoutLabel(this.locked);
+        this.setLocked(null);
+        this.emitHud();
+        return;
+      }
+
+      if (this.locked.typed > 0) {
+        this.locked.typed--;
+        this.layoutLabel(this.locked);
+      }
+
+      if (this.locked.typed === 0) {
+        this.setLocked(null);
+        this.emitHud();
+      }
+      return;
+    }
+
+    if (this.bonusLock && this.bonusWord) {
+      if (isDoubleTap || this.bonusTyped <= 1) {
+        this.bonusTyped = 0;
+        this.bonusLock = false;
+      } else {
+        this.bonusTyped--;
+      }
+      this.emitHud();
+    }
+  }
+
+  private setLocked(z: Zombie | null) {
+    if (this.locked && this.locked !== z) {
+      this.updateZombieHighlight(this.locked, false);
+    }
+    this.locked = z;
+    if (z && !z.dead && z.container.active) {
+      this.updateZombieHighlight(z, true);
+      this.updateCrosshair();
+    } else {
+      if (this.crosshair) {
+        this.crosshair.setVisible(false);
+      }
+    }
+  }
+
+  private updateZombieHighlight(z: Zombie, isLocked: boolean) {
+    if (!z || z.dead || !z.container || !z.container.active) return;
+    if (isLocked) {
+      z.typedText.setStroke("#ffd32a", 6);
+      z.restText.setStroke("#ffd32a", 6);
+      z.container.setScale(1.06);
+    } else {
+      z.typedText.setStroke("#000000", 5);
+      z.restText.setStroke("#000000", 5);
+      z.container.setScale(1.0);
+    }
+  }
+
+  private createCrosshair() {
+    const g = this.add.graphics();
+    const size = 18;
+    const arm = 8;
+    g.lineStyle(2.5, 0x00f2fe, 0.95);
+
+    // Horní levý roh
+    g.lineBetween(-size, -size + arm, -size, -size);
+    g.lineBetween(-size, -size, -size + arm, -size);
+
+    // Horní pravý roh
+    g.lineBetween(size - arm, -size, size, -size);
+    g.lineBetween(size, -size, size, -size + arm);
+
+    // Dolní levý roh
+    g.lineBetween(-size, size - arm, -size, size);
+    g.lineBetween(-size, size, -size + arm, size);
+
+    // Dolní pravý roh
+    g.lineBetween(size - arm, size, size, size);
+    g.lineBetween(size, size, size, size - arm);
+
+    // Vnitřní zaměřovací kroužek (zlatý)
+    g.lineStyle(1.5, 0xffd32a, 0.85);
+    g.strokeCircle(0, 0, 8);
+
+    // Středový bod (azurový)
+    g.fillStyle(0x00f2fe, 1);
+    g.fillCircle(0, 0, 2.5);
+
+    // Křížové rysky
+    g.lineStyle(1.5, 0x00f2fe, 0.6);
+    g.lineBetween(-size - 3, 0, -size + 3, 0);
+    g.lineBetween(size - 3, 0, size + 3, 0);
+    g.lineBetween(0, -size - 3, 0, -size + 3);
+    g.lineBetween(0, size - 3, 0, size + 3);
+
+    this.crosshair = this.add.container(0, 0, [g]);
+    this.crosshair.setDepth(200);
+    this.crosshair.setVisible(false);
+
+    // Pulzující animace
+    this.tweens.add({
+      targets: this.crosshair,
+      scale: { from: 1.0, to: 1.15 },
+      duration: 400,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  private updateCrosshair() {
+    if (this.crosshair && this.locked && !this.locked.dead && this.locked.container.active) {
+      const targetH = this.locked.sprite.displayHeight;
+      this.crosshair.setVisible(true);
+      this.crosshair.setPosition(this.locked.container.x, this.locked.container.y - targetH - 35);
+    } else if (this.crosshair) {
+      this.crosshair.setVisible(false);
+    }
   }
 
   private hit(z: Zombie, ch: string, t: number) {
@@ -378,11 +512,11 @@ export class LevelScene extends Phaser.Scene {
       z.typed = 0;
       this.layoutLabel(z);
       this.flash(z);
-      this.locked = null;
+      this.setLocked(null);
       return;
     }
     this.kill(z);
-    this.locked = null;
+    this.setLocked(null);
     this.killsSinceBonus++;
     if (this.cfg.bonusEvery && !this.bonusWord && this.killsSinceBonus >= this.cfg.bonusEvery) {
       this.killsSinceBonus = 0;
@@ -393,6 +527,7 @@ export class LevelScene extends Phaser.Scene {
   private kill(z: Zombie) {
     z.dead = true;
     this.kills++;
+    this.updateZombieHighlight(z, false);
     this.tweens.killTweensOf(z.sprite);
     this.tweens.add({
       targets: z.container,
@@ -520,6 +655,7 @@ export class LevelScene extends Phaser.Scene {
       if (z.container.x <= HOUSE_X) this.reachedHouse(z);
     }
     this.updateTowers();
+    this.updateCrosshair();
     this.hudTimer += delta;
     if (this.hudTimer > 200) {
       this.hudTimer = 0;
@@ -532,7 +668,7 @@ export class LevelScene extends Phaser.Scene {
     this.lives = Math.max(0, this.lives - damage);
     this.livesLost += damage;
     this.combo = 0;
-    if (this.locked === z) this.locked = null;
+    if (this.locked === z) this.setLocked(null);
     z.dead = true;
     this.tweens.killTweensOf(z.sprite);
     z.container.destroy();
@@ -553,6 +689,7 @@ export class LevelScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    this.setLocked(null);
     this.spawnEvent?.remove();
     const durationMs = Math.max(1, Math.round(performance.now() - this.startAt));
     const m = { correct: this.correct, errors: this.errors, durationMs };
