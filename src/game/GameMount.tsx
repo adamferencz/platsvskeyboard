@@ -88,12 +88,43 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
         </div>
       </div>
 
-      {hud?.bonusWord && (
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-emerald-600/90 px-5 py-2 font-mono text-2xl text-white shadow-lg">
-          🌱 <span className="text-emerald-200">{hud.bonusWord.slice(0, hud.bonusTyped)}</span>
-          {hud.bonusWord.slice(hud.bonusTyped)}
+      {hud?.boost && (
+        <div
+          onClick={() => bridge.emitTyped("toggle-boost")}
+          className={`absolute left-1/2 top-3 -translate-x-1/2 cursor-pointer select-none transition-all duration-150 ${
+            hud.boost.locked
+              ? "scale-105 ring-4 ring-emerald-400 shadow-2xl shadow-emerald-500/50"
+              : "hover:scale-[1.02] ring-1 ring-white/20 shadow-lg"
+          } rounded-2xl bg-zinc-900/90 px-5 py-2.5 backdrop-blur-md`}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl animate-pulse">{hud.boost.icon}</span>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                <span>{hud.boost.title}</span>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] ${
+                    hud.boost.locked
+                      ? "bg-emerald-500 text-black font-bold"
+                      : "bg-white/10 text-zinc-300"
+                  }`}
+                >
+                  {hud.boost.locked ? "ZAMČENO · PIŠ SLOVO" : "MEZERNÍK = ZAMĚŘIT"}
+                </span>
+              </div>
+              <div className="font-mono text-2xl font-bold tracking-wider text-white">
+                <span className="text-emerald-400 underline decoration-2 underline-offset-4">
+                  {hud.boost.word.slice(0, hud.boost.typed)}
+                </span>
+                <span className="text-zinc-100 opacity-90">
+                  {hud.boost.word.slice(hud.boost.typed)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
+
 
       {hud?.boss && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
