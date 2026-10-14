@@ -250,7 +250,6 @@ export class LevelScene extends Phaser.Scene {
           : TEX.zombieBasic
         : { fast: TEX.zombieFast, armored: TEX.zombieArmored, boss: TEX.boss }[kind];
     const sprite = this.add.image(0, 0, texKey).setOrigin(0.5, 1);
-    if (kind === "armored") sprite.setFlipX(true); // želva je nakreslená doprava
     // jednotná výška postav bez ohledu na rozlišení zdrojového obrázku
     const targetH = { basic: 112, fast: 98, armored: 118, boss: 210 }[kind];
     sprite.setScale(targetH / sprite.height);
