@@ -113,6 +113,7 @@ function Game() {
           round={round}
           keyStats={progress?.keyStats ?? {}}
           playerCpm={progress?.bestCpm ?? 0}
+          layout={profile?.layout ?? "qwertz"}
           onFinished={onFinished}
           onExit={() => router.push("/")}
         />
