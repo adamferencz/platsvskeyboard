@@ -161,18 +161,33 @@ export class LevelScene extends Phaser.Scene {
       if (this.started) return;
       this.started = true;
       this.startAt = performance.now();
-      title.destroy();
-      hint.destroy();
+      this.spawnZombie();
       this.spawnEvent = this.time.addEvent({
         delay: this.cfg.spawnMs,
         loop: true,
         callback: () => this.spawnZombie(),
       });
-      this.spawnZombie();
+      this.tweens.add({
+        targets: [title, hint],
+        alpha: 0,
+        duration: 500,
+        delay: 800,
+        onComplete: () => {
+          title.destroy();
+          hint.destroy();
+        },
+      });
     };
-    // hra začne prvním úhozem nebo po 3 s
-    this.time.delayedCall(3000, startGame);
-    this.events.once("first-key", startGame);
+
+    startGame();
+
+    this.events.once("first-key", () => {
+      if (title.active) {
+        this.tweens.killTweensOf([title, hint]);
+        title.destroy();
+        hint.destroy();
+      }
+    });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.input_.dispose();
@@ -208,10 +223,38 @@ export class LevelScene extends Phaser.Scene {
 
   // ---------- spawn ----------
 
+  private livingZombies(): Zombie[] {
+    return this.zombies.filter((z) => !z.dead);
+  }
+
+  private fastForwardSpawnTimer() {
+    if (this.finished || !this.started) return;
+    const moreToSpawn = this.spawned < this.cfg.count || (this.cfg.boss && !this.bossSpawned);
+    if (this.livingZombies().length === 0 && moreToSpawn) {
+      const remaining = this.spawnEvent ? this.spawnEvent.getRemaining() : 400;
+      if (remaining > 400) {
+        if (this.spawnEvent) {
+          this.spawnEvent.reset({
+            delay: 400,
+            callback: () => this.spawnZombie(),
+            loop: true,
+          });
+        } else {
+          this.spawnEvent = this.time.addEvent({
+            delay: 400,
+            callback: () => this.spawnZombie(),
+            loop: true,
+          });
+        }
+      }
+    }
+  }
+
   private spawnZombie() {
     if (this.finished) return;
     if (this.spawned >= this.cfg.count) {
       this.spawnEvent?.remove();
+      this.spawnEvent = undefined;
       if (this.cfg.boss && !this.bossSpawned) this.spawnBoss();
       return;
     }
@@ -221,6 +264,23 @@ export class LevelScene extends Phaser.Scene {
     const word = this.uniqueWord();
     const queue = kind === "armored" ? [this.uniqueWord()] : [];
     this.addZombie(kind, word, queue);
+
+    // Po spawnu vrátíme časovač na standardní interval kola pro dalšího zombíka
+    if (this.spawned < this.cfg.count) {
+      if (this.spawnEvent) {
+        this.spawnEvent.reset({
+          delay: this.cfg.spawnMs,
+          callback: () => this.spawnZombie(),
+          loop: true,
+        });
+      } else {
+        this.spawnEvent = this.time.addEvent({
+          delay: this.cfg.spawnMs,
+          callback: () => this.spawnZombie(),
+          loop: true,
+        });
+      }
+    }
   }
 
   private spawnBoss() {
@@ -231,7 +291,7 @@ export class LevelScene extends Phaser.Scene {
 
   /** V jedné chvíli nemají dva zombíci stejné první písmeno (ZType). */
   private uniqueWord(): string {
-    const taken = new Set(this.zombies.filter((z) => !z.dead).map((z) => z.word[0]?.toLowerCase()));
+    const taken = new Set(this.livingZombies().map((z) => z.word[0]?.toLowerCase()));
     if (this.bonusWord) taken.add(this.bonusWord[0]);
     for (let i = 0; i < 25; i++) {
       const w = this.gen.next();
@@ -299,7 +359,7 @@ export class LevelScene extends Phaser.Scene {
 
   private pickLane(): number {
     // dráha s nejmenším počtem živých zombíků, při shodě náhodně
-    const counts = Array.from({ length: LANES }, (_, i) => this.zombies.filter((z) => !z.dead && z.lane === i).length);
+    const counts = Array.from({ length: LANES }, (_, i) => this.livingZombies().filter((z) => z.lane === i).length);
     const min = Math.min(...counts);
     const candidates = counts.map((c, i) => (c === min ? i : -1)).filter((i) => i >= 0);
     return candidates[Math.floor(Math.random() * candidates.length)];
@@ -320,7 +380,7 @@ export class LevelScene extends Phaser.Scene {
 
   private onChar(ch: string, tAbs: number) {
     if (this.finished) return;
-    if (!this.started) this.events.emit("first-key");
+    this.events.emit("first-key");
     const t = Math.round(tAbs - this.startAt);
     if (ch === " ") return; // mezera zatím nic (slova jsou jednotlivá)
 
@@ -405,6 +465,7 @@ export class LevelScene extends Phaser.Scene {
     });
     this.emitHud();
     this.checkEnd();
+    this.fastForwardSpawnTimer();
   }
 
   private flash(z: Zombie) {
@@ -540,12 +601,15 @@ export class LevelScene extends Phaser.Scene {
     this.cameras.main.flash(150, 200, 30, 30);
     this.emitHud();
     if (this.lives <= 0) this.finish(false);
-    else this.checkEnd();
+    else {
+      this.checkEnd();
+      this.fastForwardSpawnTimer();
+    }
   }
 
   private checkEnd() {
     if (this.finished) return;
-    const alive = this.zombies.some((z) => !z.dead);
+    const alive = this.livingZombies().length > 0;
     const moreToSpawn = this.spawned < this.cfg.count || (this.cfg.boss && !this.bossSpawned);
     if (!alive && !moreToSpawn) this.finish(true);
   }
@@ -595,12 +659,12 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private emitHud() {
-    const boss = this.zombies.find((z) => z.kind === "boss" && !z.dead);
+    const boss = this.livingZombies().find((z) => z.kind === "boss");
     const state: HudState = {
       lives: this.lives,
       score: this.score,
       combo: this.combo,
-      remaining: this.cfg.count - this.spawned + this.zombies.filter((z) => !z.dead).length + (this.cfg.boss && !this.bossSpawned ? 1 : 0),
+      remaining: this.cfg.count - this.spawned + this.livingZombies().length + (this.cfg.boss && !this.bossSpawned ? 1 : 0),
       bonusWord: this.bonusWord,
       bonusTyped: this.bonusTyped,
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
