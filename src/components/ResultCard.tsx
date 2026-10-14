@@ -5,6 +5,9 @@ import type { RunResult } from "@/game/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "./Kbd";
 
+/** ms po konci kola, kdy výsledková karta ignoruje klávesy */
+const ARM_MS = 700;
+
 interface Props {
   result: RunResult;
   saving: boolean;
@@ -27,12 +30,18 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
   const primary = canNext ? (saving ? null : onNext) : onRetry;
   const primaryRef = useRef<HTMLButtonElement>(null);
 
-  // fokus na hlavní tlačítko, ať Enter funguje i nativně a Tab začíná u něj
+  // Fokus na hlavní tlačítko, ať Enter funguje i nativně a Tab začíná u něj.
+  // Až po ARM_MS: jinak by mezerník dopsaný po konci kola tlačítko nativně zmáčkl.
+  // Fokus nebereme, pokud se student už Tabem přesunul jinam.
   useEffect(() => {
-    primaryRef.current?.focus({ preventScroll: true });
+    const t = setTimeout(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body) primaryRef.current?.focus({ preventScroll: true });
+    }, ARM_MS);
+    return () => clearTimeout(t);
   }, [canNext, saving]);
 
-  // 700 ms rezerva: písmena dopsaná po konci kola nesmí spustit akci
+  // stejná rezerva pro zkratky: písmena dopsaná po konci kola nesmí spustit akci
   useHotkeys(
     {
       Enter: () => primary?.(),
@@ -40,7 +49,7 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
       Escape: onMap,
       m: onMap,
     },
-    { armDelayMs: 700 },
+    { armDelayMs: ARM_MS },
   );
 
   return (
