@@ -37,4 +37,5 @@ export interface HudState {
   bonusWord: string | null;
   bonusTyped: number;
   boss: { hp: number; maxHp: number } | null;
+  muted?: boolean;
 }

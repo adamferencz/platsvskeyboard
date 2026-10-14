@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type Phaser from "phaser";
+import { soundManager } from "./audio/soundManager";
 import { bridge } from "./bridge";
 import { chapterById } from "./content/curriculum";
 import { loadWords, type KeyStat } from "./content/words";
@@ -24,11 +25,20 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
+  const [muted, setMuted] = useState(false);
   const [loading, setLoading] = useState(true);
   const finishedRef = useRef(onFinished);
   const exitRef = useRef(onExit);
   finishedRef.current = onFinished;
   exitRef.current = onExit;
+
+  useEffect(() => {
+    setMuted(soundManager.isMuted());
+    const offMute = soundManager.addListener(setMuted);
+    return () => {
+      offMute();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +90,21 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
             <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
           </div>
         </div>
-        <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
-          <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
-          <div className="text-sm text-zinc-200">
-            zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            onClick={() => soundManager.toggleMute()}
+            className="pointer-events-auto flex items-center justify-center rounded-lg bg-black/55 px-3 py-2 text-xl backdrop-blur-sm transition hover:bg-black/75 hover:scale-105 active:scale-95 focus:outline-none"
+            title={(hud?.muted ?? muted) ? "Zapnout zvuk (SFX)" : "Ztlumit zvuk (SFX)"}
+            aria-label={(hud?.muted ?? muted) ? "Zapnout zvuk" : "Ztlumit zvuk"}
+          >
+            {(hud?.muted ?? muted) ? "🔇" : "🔊"}
+          </button>
+          <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
+            <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
+            <div className="text-sm text-zinc-200">
+              zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
+            </div>
           </div>
         </div>
       </div>
