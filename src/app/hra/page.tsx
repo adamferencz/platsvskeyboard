@@ -13,7 +13,6 @@ import { getProgress, saveRun, saveZenPractice } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "@/components/Kbd";
-import { bridge } from "@/game/bridge";
 
 const GameMount = dynamic(() => import("@/game/GameMount"), { ssr: false });
 
@@ -54,6 +53,8 @@ function Game() {
   }, [user, attempt, chapter, round]);
 
   const toggleZenMode = (enabled: boolean) => {
+    setResult(null);
+    setSuspicious(null);
     setZenMode(enabled);
     const url = enabled
       ? `/hra?c=${chapter}&r=${round}&zen=1`
@@ -89,8 +90,8 @@ function Game() {
   const handleRetry = useCallback(() => {
     setResult(null);
     setSuspicious(null);
+    // nové kolo se znovu připojí (attempt je v key), aby dostalo čerstvé keyStats a playerCpm
     setAttempt((a) => a + 1);
-    bridge.emitTyped("restart-level");
   }, []);
 
   const locked = progress !== undefined && chapter > (progress?.unlockedChapter ?? 1);
@@ -165,7 +166,7 @@ function Game() {
       </div>
 
       <GameMount
-        key={`${chapter}-${round}-${zenMode ? "zen" : "std"}`}
+        key={`${chapter}-${round}-${attempt}-${zenMode ? "zen" : "std"}`}
         chapter={chapter}
         round={round}
         keyStats={progress?.keyStats ?? {}}

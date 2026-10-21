@@ -114,7 +114,8 @@ export class LevelScene extends Phaser.Scene {
     this.data_ = data;
     this.cfg = roundConfig(data.chapter, data.round, data.playerCpm);
     this.lives = this.cfg.lives;
-    this.keyStats = { ...data.keyStats };
+    // hluboká kopie: registerKey mění vnitřní objekty a data_ se znovu použijí při restartu
+    this.keyStats = Object.fromEntries(Object.entries(data.keyStats).map(([k, s]) => [k, { ...s }]));
     this.zombies = [];
     this.towers = [];
     this.locked = null;
@@ -234,7 +235,11 @@ export class LevelScene extends Phaser.Scene {
       if (!this.activeBoost && !this.finished) this.offerBoost();
     });
 
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+    // game.destroy() při odmountování SHUTDOWN nevyšle, jen DESTROY — úklid musí běžet v obou případech
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) return;
+      cleaned = true;
       offToggleMute();
       offSoundMute();
       offToggleBoost();
@@ -244,7 +249,9 @@ export class LevelScene extends Phaser.Scene {
       offResume();
       offPause();
       offRestart();
-    });
+    };
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanup);
+    this.events.once(Phaser.Scenes.Events.DESTROY, cleanup);
 
     bridge.emitTyped("level-ready");
     this.emitHud();
@@ -647,6 +654,7 @@ export class LevelScene extends Phaser.Scene {
     if (!this.activeBoost || this.finished) return;
     const nextLocked = force !== undefined ? force : !this.boostLocked;
     this.boostLocked = nextLocked;
+    if (!this.boostLocked) this.activeBoost.typed = 0;
     if (this.boostLocked) {
       if (this.locked) {
         this.locked.typed = 0;
@@ -829,6 +837,8 @@ export class LevelScene extends Phaser.Scene {
         const type = this.activeBoost.type;
         this.activeBoost = null;
         this.boostLocked = false;
+        // body dřív než efekt: bomba může zabít posledního zombíka a ukončit kolo
+        this.score += 50;
         this.triggerBoost(type);
       }
     } else {
@@ -864,7 +874,6 @@ export class LevelScene extends Phaser.Scene {
         this.healBase();
         break;
     }
-    this.score += 50;
     this.emitHud();
   }
 

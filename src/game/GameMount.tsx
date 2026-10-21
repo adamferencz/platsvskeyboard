@@ -156,6 +156,8 @@ export default function GameMount({
     if (!isPaused) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape, který pauzu právě zapnul (TypingInput ho už zpracoval), ji nesmí hned vypnout
+      if (e.defaultPrevented) return;
       if (e.key === "Escape" || e.key === "Enter") {
         e.preventDefault();
         bridge.emitTyped("resume-level");

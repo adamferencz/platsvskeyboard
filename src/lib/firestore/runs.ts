@@ -154,7 +154,8 @@ export async function saveZenPractice(
     bestCpm: prev.bestCpm,
     bestNetCpm: prev.bestNetCpm,
     totalRuns: prev.totalRuns + 1,
-    totalMinutes: Math.round((prev.totalMinutes + result.durationMs / 60000) * 100) / 100,
+    // zen se do minut nepočítá — totalMinutes jde do soutěžního žebříčku „Nejpilnější“
+    totalMinutes: prev.totalMinutes,
     totalScore: prev.totalScore,
     keyStats,
   };
