@@ -9,7 +9,7 @@ import { ResultCard } from "@/components/ResultCard";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, chapterById } from "@/game/content/curriculum";
 import type { RunResult } from "@/game/types";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { getProgress, saveRun } from "@/lib/firestore/runs";
+import { getProgress, saveRun, saveZenPractice } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "@/components/Kbd";
@@ -33,6 +33,8 @@ function Game() {
   const { user, profile } = useAuth();
   const chapter = Number(params.get("c") ?? 1);
   const round = Number(params.get("r") ?? 1);
+  const isZenFromQuery = params.get("zen") === "1" || params.get("zen") === "true";
+  const [zenMode, setZenMode] = useState(isZenFromQuery);
   const valid = !!chapterById(chapter) && round >= 1 && round <= ROUNDS_PER_CHAPTER;
 
   const [progress, setProgress] = useState<ProgressDoc | null | undefined>(undefined);
@@ -43,8 +45,21 @@ function Game() {
   const [suspicious, setSuspicious] = useState<string | null>(null);
 
   useEffect(() => {
+    const isZen = params.get("zen") === "1" || params.get("zen") === "true";
+    setZenMode(isZen);
+  }, [params]);
+
+  useEffect(() => {
     if (user) getProgress(user.uid).then(setProgress);
   }, [user, attempt, chapter, round]);
+
+  const toggleZenMode = (enabled: boolean) => {
+    setZenMode(enabled);
+    const url = enabled
+      ? `/hra?c=${chapter}&r=${round}&zen=1`
+      : `/hra?c=${chapter}&r=${round}`;
+    router.replace(url);
+  };
 
   const onFinished = useCallback(
     async (r: RunResult) => {
@@ -53,15 +68,22 @@ function Game() {
       setSaving(true);
       setSaveError(null);
       try {
-        const out = await saveRun(user.uid, profile, r);
-        setSuspicious(out.suspicious);
+        if (r.zenMode || zenMode) {
+          // Zen režim: ukládá se pouze osobní procvičování do keyStats, nikdy do soutěžních žebříčků
+          const out = await saveZenPractice(user.uid, r);
+          setProgress(out.progress);
+          setSuspicious(null);
+        } else {
+          const out = await saveRun(user.uid, profile, r);
+          setSuspicious(out.suspicious);
+        }
       } catch (e) {
         setSaveError((e as Error).message);
       } finally {
         setSaving(false);
       }
     },
-    [user, profile],
+    [user, profile, zenMode],
   );
 
   const handleRetry = useCallback(() => {
@@ -102,26 +124,54 @@ function Game() {
   const goNext = () => {
     setResult(null);
     setSuspicious(null);
-    if (round < ROUNDS_PER_CHAPTER) router.push(`/hra?c=${chapter}&r=${round + 1}`);
-    else router.push(`/hra?c=${chapter + 1}&r=1`);
+    const zenQ = zenMode ? "&zen=1" : "";
+    if (round < ROUNDS_PER_CHAPTER) router.push(`/hra?c=${chapter}&r=${round + 1}${zenQ}`);
+    else router.push(`/hra?c=${chapter + 1}&r=1${zenQ}`);
   };
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between text-sm text-zinc-400">
-        <Link href="/" className="hover:text-white">
-          ← Mapa
-        </Link>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-400">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="hover:text-white">
+            ← Mapa
+          </Link>
+          <div className="inline-flex rounded-lg bg-zinc-800/80 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => toggleZenMode(false)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                !zenMode
+                  ? "bg-zinc-700 font-semibold text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              ⚡ Standardní hra
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleZenMode(true)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                zenMode
+                  ? "bg-emerald-600 font-semibold text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              🧘 Zen trénink
+            </button>
+          </div>
+        </div>
         <span>Esc = pauza · piš rovnou, není potřeba nikam klikat</span>
       </div>
 
       <GameMount
-        key={`${chapter}-${round}`}
+        key={`${chapter}-${round}-${zenMode ? "zen" : "std"}`}
         chapter={chapter}
         round={round}
         keyStats={progress?.keyStats ?? {}}
         playerCpm={progress?.bestCpm ?? 0}
         layout={profile?.layout ?? "qwertz"}
+        zenMode={zenMode}
         onFinished={onFinished}
         onExit={() => router.push("/")}
         resultOverlay={

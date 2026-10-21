@@ -19,6 +19,8 @@ export interface LevelData {
   keyStats: Record<string, KeyStat>;
   playerCpm: number;
   parent: HTMLElement;
+  zenMode?: boolean;
+  zenSpeed?: number;
 }
 
 const W = 1280;
@@ -146,9 +148,9 @@ export class LevelScene extends Phaser.Scene {
     house.setScale(Math.min(250 / house.width, (LANES * LANE_H) / house.height));
 
     const title = this.add
-      .text(W / 2, H / 2 - 40, `${chapter.name}\nkolo ${this.data_.round}`, {
+      .text(W / 2, H / 2 - 40, `${chapter.name}\nkolo ${this.data_.round}${this.data_.zenMode ? "\n🧘 Zen trénink" : ""}`, {
         fontFamily: "system-ui, sans-serif",
-        fontSize: "44px",
+        fontSize: this.data_.zenMode ? "38px" : "44px",
         color: "#ffffff",
         align: "center",
         stroke: "#000000",
@@ -156,8 +158,11 @@ export class LevelScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(100);
+    const hintText = this.data_.zenMode
+      ? "Klidný trénink bez stresu. Piš vlastním tempem…"
+      : "Piš písmena na zombících. Začni psát…";
     const hint = this.add
-      .text(W / 2, H / 2 + 50, "Piš písmena na zombících. Začni psát…", {
+      .text(W / 2, H / 2 + 50, hintText, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "24px",
         color: "#ffe066",
@@ -253,6 +258,11 @@ export class LevelScene extends Phaser.Scene {
 
   // ---------- spawn ----------
 
+  /** Interval spawnu; v zenu pomalejší. */
+  private spawnDelay(): number {
+    return this.data_.zenMode ? Math.max(this.cfg.spawnMs * 1.6, 4500) : this.cfg.spawnMs;
+  }
+
   private livingZombies(): Zombie[] {
     return this.zombies.filter((z) => !z.dead);
   }
@@ -282,6 +292,11 @@ export class LevelScene extends Phaser.Scene {
 
   private spawnZombie() {
     if (this.finished) return;
+    if (this.data_.zenMode) {
+      // V Zen režimu se na ploše drží nanejvýš 2 zombíci najednou pro klidné tempo
+      const aliveCount = this.zombies.filter((z) => !z.dead).length;
+      if (aliveCount >= 2) return;
+    }
     if (this.spawned >= this.cfg.count) {
       this.spawnEvent?.remove();
       this.spawnEvent = undefined;
@@ -299,13 +314,13 @@ export class LevelScene extends Phaser.Scene {
     if (this.spawned < this.cfg.count) {
       if (this.spawnEvent) {
         this.spawnEvent.reset({
-          delay: this.cfg.spawnMs,
+          delay: this.spawnDelay(),
           callback: () => this.spawnZombie(),
           loop: true,
         });
       } else {
         this.spawnEvent = this.time.addEvent({
-          delay: this.cfg.spawnMs,
+          delay: this.spawnDelay(),
           callback: () => this.spawnZombie(),
           loop: true,
         });
@@ -357,6 +372,7 @@ export class LevelScene extends Phaser.Scene {
     container.setDepth(10 + lane);
 
     const speedMul = kind === "fast" ? 1.55 : kind === "boss" ? 0.55 : kind === "armored" ? 0.85 : 1;
+    const zenMul = this.data_.zenMode ? (this.data_.zenSpeed ?? 0.35) : 1;
     const z: Zombie = {
       kind,
       lane,
@@ -367,7 +383,7 @@ export class LevelScene extends Phaser.Scene {
       restText,
       word,
       typed: 0,
-      speed: ((SPAWN_X - HOUSE_X) / this.cfg.crossSec) * speedMul,
+      speed: ((SPAWN_X - HOUSE_X) / this.cfg.crossSec) * speedMul * zenMul,
       queue,
       hp: 1 + queue.length,
       maxHp: 1 + queue.length,
@@ -650,6 +666,11 @@ export class LevelScene extends Phaser.Scene {
       onComplete: () => z.container.destroy(),
     });
     this.emitHud();
+    if (this.data_.zenMode && this.spawned < this.cfg.count) {
+      this.time.delayedCall(1000, () => {
+        if (!this.finished) this.spawnZombie();
+      });
+    }
     this.checkEnd();
     this.fastForwardSpawnTimer();
   }
@@ -780,6 +801,15 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private reachedHouse(z: Zombie) {
+    if (this.data_.zenMode) {
+      // V Zen režimu zombík resetuje svou pozici na začátek dráhy a neubírá životy (žádná prohra)
+      z.container.x = SPAWN_X;
+      this.cameras.main.shake(80, 0.002);
+      this.flash(z);
+      this.emitHud();
+      return;
+    }
+
     const damage = z.kind === "boss" ? 3 : 1;
     this.lives = Math.max(0, this.lives - damage);
     this.livesLost += damage;
@@ -847,9 +877,11 @@ export class LevelScene extends Phaser.Scene {
       maxCombo: this.maxCombo,
       keyStats: this.keyStats,
       keystrokes: this.keystrokes,
+      zenMode: !!this.data_.zenMode,
     };
+    const titleMsg = this.data_.zenMode ? "Kolo dokončeno! 🧘" : won ? "Kolo vyhráno!" : "Zombíci prošli…";
     this.add
-      .text(W / 2, H / 2, won ? "Kolo vyhráno!" : "Zombíci prošli…", {
+      .text(W / 2, H / 2, titleMsg, {
         fontFamily: "system-ui, sans-serif",
         fontSize: "56px",
         color: won ? "#2ecc71" : "#e74c3c",

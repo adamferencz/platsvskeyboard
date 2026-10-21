@@ -15,6 +15,8 @@ interface Props {
   keyStats: Record<string, KeyStat>;
   playerCpm: number;
   layout?: "qwertz" | "qwerty";
+  zenMode?: boolean;
+  zenSpeed?: number;
   onFinished: (result: RunResult) => void;
   onExit: () => void;
   resultOverlay?: React.ReactNode;
@@ -30,6 +32,8 @@ export default function GameMount({
   keyStats,
   playerCpm,
   layout,
+  zenMode,
+  zenSpeed,
   onFinished,
   onExit,
   resultOverlay,
@@ -129,6 +133,8 @@ export default function GameMount({
         keyStats,
         playerCpm,
         parent: parentRef.current,
+        zenMode,
+        zenSpeed,
       });
     })();
 
@@ -142,9 +148,9 @@ export default function GameMount({
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-    // hra se vytváří jednou pro danou úroveň; keyStats/playerCpm se čtou jen při startu
+    // hra se vytváří jednou pro danou úroveň a režim; keyStats/playerCpm se čtou jen při startu
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chapter, round]);
+  }, [chapter, round, zenMode, zenSpeed]);
 
   useEffect(() => {
     if (!isPaused) return;
@@ -202,8 +208,16 @@ export default function GameMount({
           <div className="space-y-1.5 rounded-xl border border-white/10 bg-black/65 px-3.5 py-2.5 backdrop-blur-md shadow-xl">
             <div className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
               Kapitola {chapter} · {ch?.name} · {round === 6 ? "👑 Boss" : `kolo ${round}`}
+              {zenMode && (
+                <span className="ml-2 inline-flex items-center rounded bg-emerald-700/80 px-1.5 py-0.5 text-xs font-semibold normal-case text-emerald-100">
+                  🧘 Zen
+                </span>
+              )}
             </div>
-            {/* Glowing Life Containers */}
+            {/* Glowing Life Containers (v zenu se životy neztrácí) */}
+            {zenMode ? (
+              <div className="text-xs font-medium text-emerald-400">Klidný režim · bez časového stresu</div>
+            ) : (
             <div
               className={`flex items-center gap-1.5 ${damaged ? "animate-damage-shake" : ""}`}
               aria-label={`Životy: ${hud?.lives ?? "-"}`}
@@ -237,6 +251,7 @@ export default function GameMount({
                 );
               })}
             </div>
+            )}
           </div>
 
           {/* Center: Dedicated Arcade Combo Meter */}
