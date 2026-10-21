@@ -164,7 +164,7 @@ export class LevelScene extends Phaser.Scene {
       onEscape: () => this.exit(),
     });
 
-    const offToggleBoost = bridge.onTyped("toggle-boost", () => this.toggleBoostLock());
+    const offToggleBoost = bridge.onTyped("toggle-boost", (force?: boolean) => this.toggleBoostLock(force));
 
     const startGame = () => {
       if (this.started) return;
@@ -246,13 +246,18 @@ export class LevelScene extends Phaser.Scene {
 
   /** V jedné chvíli nemají dva zombíci stejné první písmeno (ZType). */
   private uniqueWord(): string {
-    const taken = new Set(this.zombies.filter((z) => !z.dead).map((z) => z.word[0]?.toLowerCase()));
+    const taken = new Set(
+      this.zombies
+        .filter((z) => !z.dead)
+        .map((z) => z.word[0]?.toLowerCase())
+        .filter((c): c is string => Boolean(c))
+    );
     if (this.activeBoost) taken.add(this.activeBoost.word[0].toLowerCase());
-    for (let i = 0; i < 25; i++) {
-      const w = this.gen.next();
-      if (!taken.has(w[0].toLowerCase())) return w;
+    for (let i = 0; i < 30; i++) {
+      const w = this.gen.next(taken);
+      if (!taken.has(w[0]?.toLowerCase())) return w;
     }
-    return this.gen.next();
+    return this.gen.next(taken);
   }
 
   private addZombie(kind: ZombieKind, word: string, queue: string[]) {
@@ -341,15 +346,15 @@ export class LevelScene extends Phaser.Scene {
     if (!this.started) this.events.emit("first-key");
     const t = Math.round(tAbs - this.startAt);
 
-    // Mezerník přepíná zaměření na bůst
-    if (ch === " ") {
+    // Mezerník nebo Tab přepíná zaměření na bůst
+    if (ch === " " || ch === "\t" || ch === "Tab") {
       if (this.activeBoost) {
         this.toggleBoostLock();
       }
       return;
     }
 
-    // 1) Pokud je hráč zamčený na bůst
+    // 1) Pokud je hráč zamčený na bůst -> klávesy jdou výhradně na bůst
     if (this.boostLocked && this.activeBoost) {
       this.hitBoost(ch, t);
       return;
@@ -392,11 +397,16 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
-  private toggleBoostLock() {
+  private toggleBoostLock(force?: boolean) {
     if (!this.activeBoost || this.finished) return;
-    this.boostLocked = !this.boostLocked;
+    const nextLocked = force !== undefined ? force : !this.boostLocked;
+    this.boostLocked = nextLocked;
     if (this.boostLocked) {
-      this.locked = null;
+      if (this.locked) {
+        this.locked.typed = 0;
+        this.layoutLabel(this.locked);
+        this.locked = null;
+      }
     }
     this.emitHud();
   }
@@ -423,7 +433,11 @@ export class LevelScene extends Phaser.Scene {
     z.hp--;
     if (z.queue.length > 0) {
       // boss / obrněný: další slovo
-      z.word = z.queue.shift()!;
+      let nextW = z.queue.shift()!;
+      if (this.activeBoost && nextW[0]?.toLowerCase() === this.activeBoost.word[0]?.toLowerCase()) {
+        nextW = this.uniqueWord();
+      }
+      z.word = nextW;
       z.typed = 0;
       this.layoutLabel(z);
       this.flash(z);
@@ -518,12 +532,17 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private uniqueBoostWord(): string {
-    const taken = new Set(this.zombies.filter((z) => !z.dead).map((z) => z.word[0]?.toLowerCase()));
-    for (let i = 0; i < 20; i++) {
-      const w = this.gen.boostWord();
+    const taken = new Set(
+      this.zombies
+        .filter((z) => !z.dead)
+        .map((z) => z.word[0]?.toLowerCase())
+        .filter((c): c is string => Boolean(c))
+    );
+    for (let i = 0; i < 30; i++) {
+      const w = this.gen.boostWord(taken);
       if (!taken.has(w[0]?.toLowerCase())) return w;
     }
-    return this.gen.boostWord();
+    return this.gen.boostWord(taken);
   }
 
   private hitBoost(ch: string, t: number) {
