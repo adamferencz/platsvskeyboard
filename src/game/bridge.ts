@@ -12,6 +12,10 @@ export interface BridgeEvents {
   "exit": () => void;
   "toggle-mute": () => void;
   "mute-changed": (muted: boolean) => void;
+  "pause-state": (paused: boolean) => void;
+  "resume-level": () => void;
+  "pause-level": () => void;
+  "restart-level": () => void;
 }
 
 class Bridge extends Phaser.Events.EventEmitter {

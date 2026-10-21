@@ -103,7 +103,7 @@ function Game() {
         <Link href="/" className="hover:text-white">
           ← Mapa
         </Link>
-        <span>Esc = zpět na mapu · piš rovnou, není potřeba nikam klikat</span>
+        <span>Esc = pauza · piš rovnou, není potřeba nikam klikat</span>
       </div>
 
       {!result && (

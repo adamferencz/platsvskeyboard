@@ -67,6 +67,10 @@ export class LevelScene extends Phaser.Scene {
   private finished = false;
   private started = false;
   private startAt = 0;
+  private isPaused = false;
+  private pauseStartAt = 0;
+  private totalPauseDurationMs = 0;
+  private startTimer?: Phaser.Time.TimerEvent;
 
   private lives = 5;
   private livesLost = 0;
@@ -104,6 +108,10 @@ export class LevelScene extends Phaser.Scene {
     this.bossSpawned = false;
     this.finished = false;
     this.started = false;
+    this.isPaused = false;
+    this.pauseStartAt = 0;
+    this.totalPauseDurationMs = 0;
+    this.startTimer = undefined;
     this.livesLost = 0;
     this.score = 0;
     this.combo = 0;
@@ -155,13 +163,14 @@ export class LevelScene extends Phaser.Scene {
 
     this.input_ = new TypingInput(this.data_.parent, {
       onChar: (ch, t) => this.onChar(ch, t),
-      onEscape: () => this.exit(),
+      onEscape: () => this.togglePause(),
     });
 
     const startGame = () => {
       if (this.started) return;
       this.started = true;
       this.startAt = performance.now();
+      this.startTimer = undefined;
       title.destroy();
       hint.destroy();
       this.spawnEvent = this.time.addEvent({
@@ -172,7 +181,7 @@ export class LevelScene extends Phaser.Scene {
       this.spawnZombie();
     };
     // hra začne prvním úhozem nebo po 3 s
-    this.time.delayedCall(3000, startGame);
+    this.startTimer = this.time.delayedCall(3000, startGame);
     this.events.once("first-key", startGame);
 
     const offToggleMute = bridge.onTyped("toggle-mute", () => {
@@ -181,12 +190,19 @@ export class LevelScene extends Phaser.Scene {
     const offSoundMute = soundManager.addListener(() => {
       this.emitHud();
     });
+    const offResume = bridge.onTyped("resume-level", () => this.setPaused(false));
+    const offPause = bridge.onTyped("pause-level", () => this.setPaused(true));
+    const offRestart = bridge.onTyped("restart-level", () => this.restartLevel());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       offToggleMute();
       offSoundMute();
       this.input_.dispose();
       this.spawnEvent?.remove();
+      this.startTimer?.remove();
+      offResume();
+      offPause();
+      offRestart();
     });
 
     bridge.emitTyped("level-ready");
@@ -329,9 +345,9 @@ export class LevelScene extends Phaser.Scene {
   // ---------- vstup ----------
 
   private onChar(ch: string, tAbs: number) {
-    if (this.finished) return;
+    if (this.finished || this.isPaused) return;
     if (!this.started) this.events.emit("first-key");
-    const t = Math.round(tAbs - this.startAt);
+    const t = Math.round(tAbs - this.startAt - this.totalPauseDurationMs);
     if (ch === " ") return; // mezera zatím nic (slova jsou jednotlivá)
 
     // 1) zamčený zombík
@@ -534,7 +550,7 @@ export class LevelScene extends Phaser.Scene {
   // ---------- smyčka ----------
 
   update(_time: number, delta: number) {
-    if (this.finished || !this.started) return;
+    if (this.finished || !this.started || this.isPaused) return;
     const dt = delta / 1000;
     for (const z of this.zombies) {
       if (z.dead) continue;
@@ -576,13 +592,21 @@ export class LevelScene extends Phaser.Scene {
   private finish(won: boolean) {
     if (this.finished) return;
     this.finished = true;
+    if (this.isPaused && this.pauseStartAt > 0) {
+      const pauseDelta = performance.now() - this.pauseStartAt;
+      this.totalPauseDurationMs += pauseDelta;
+      this.pauseStartAt = 0;
+      this.isPaused = false;
+      bridge.emitTyped("pause-state", false);
+    }
     this.spawnEvent?.remove();
+    this.startTimer?.remove();
     if (won) {
       soundManager.playVictory();
     } else {
       soundManager.playDefeat();
     }
-    const durationMs = Math.max(1, Math.round(performance.now() - this.startAt));
+    const durationMs = Math.max(1, Math.round(performance.now() - this.startAt - this.totalPauseDurationMs));
     const m = { correct: this.correct, errors: this.errors, durationMs };
     const acc = accuracy(m);
     const result: RunResult = {
@@ -616,6 +640,48 @@ export class LevelScene extends Phaser.Scene {
       .setDepth(100);
     this.emitHud();
     bridge.emitTyped("run-finished", result);
+  }
+
+  private togglePause() {
+    if (this.finished) return;
+    this.setPaused(!this.isPaused);
+  }
+
+  private setPaused(paused: boolean) {
+    if (this.finished || this.isPaused === paused) return;
+    this.isPaused = paused;
+
+    if (paused) {
+      this.pauseStartAt = performance.now();
+      if (this.spawnEvent) this.spawnEvent.paused = true;
+      if (this.startTimer) this.startTimer.paused = true;
+      this.tweens.pauseAll();
+      this.input_.setPaused(true);
+      bridge.emitTyped("pause-state", true);
+    } else {
+      if (this.pauseStartAt > 0) {
+        const pauseDelta = performance.now() - this.pauseStartAt;
+        this.totalPauseDurationMs += pauseDelta;
+        this.pauseStartAt = 0;
+        for (const tw of this.towers) {
+          tw.expiresAt += pauseDelta;
+          tw.nextShotAt += pauseDelta;
+        }
+      }
+      if (this.spawnEvent) this.spawnEvent.paused = false;
+      if (this.startTimer) this.startTimer.paused = false;
+      this.tweens.resumeAll();
+      this.input_.setPaused(false);
+      bridge.emitTyped("pause-state", false);
+    }
+  }
+
+  private restartLevel() {
+    if (this.isPaused) {
+      this.setPaused(false);
+    }
+    bridge.emitTyped("pause-state", false);
+    this.scene.restart(this.data_);
   }
 
   private exit() {
