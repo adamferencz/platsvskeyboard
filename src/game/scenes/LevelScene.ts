@@ -34,6 +34,7 @@ interface Zombie {
   lane: number;
   sprite: Phaser.GameObjects.Image;
   container: Phaser.GameObjects.Container;
+  labelBg: Phaser.GameObjects.Graphics;
   typedText: Phaser.GameObjects.Text;
   restText: Phaser.GameObjects.Text;
   word: string;
@@ -279,7 +280,7 @@ export class LevelScene extends Phaser.Scene {
         : { fast: TEX.zombieFast, armored: TEX.zombieArmored, boss: TEX.boss }[kind];
     const sprite = this.add.image(0, 0, texKey).setOrigin(0.5, 1);
     // jednotná výška postav bez ohledu na rozlišení zdrojového obrázku
-    const targetH = { basic: 112, fast: 98, armored: 118, boss: 210 }[kind];
+    const targetH = { basic: 136, fast: 118, armored: 140, boss: 235 }[kind];
     sprite.setScale(targetH / sprite.height);
     const fontSize = kind === "boss" ? 40 : 30;
     const style = {
@@ -288,9 +289,10 @@ export class LevelScene extends Phaser.Scene {
       stroke: "#000000",
       strokeThickness: 5,
     };
+    const labelBg = this.add.graphics();
     const typedText = this.add.text(0, 0, "", { ...style, color: "#2ecc71" }).setOrigin(0, 1);
     const restText = this.add.text(0, 0, word, { ...style, color: "#ffffff" }).setOrigin(0, 1);
-    const container = this.add.container(SPAWN_X, y, [sprite, typedText, restText]);
+    const container = this.add.container(SPAWN_X, y, [sprite, labelBg, typedText, restText]);
     container.setDepth(10 + lane);
 
     const speedMul = kind === "fast" ? 1.55 : kind === "boss" ? 0.55 : kind === "armored" ? 0.85 : 1;
@@ -299,6 +301,7 @@ export class LevelScene extends Phaser.Scene {
       lane,
       sprite,
       container,
+      labelBg,
       typedText,
       restText,
       word,
@@ -339,9 +342,25 @@ export class LevelScene extends Phaser.Scene {
     z.typedText.setText(typed);
     z.restText.setText(rest);
     const total = z.typedText.width + z.restText.width;
-    const top = -z.sprite.displayHeight - 8;
+    const top = -z.sprite.displayHeight - 10;
     z.typedText.setPosition(-total / 2, top);
     z.restText.setPosition(-total / 2 + z.typedText.width, top);
+
+    z.labelBg.clear();
+    if (total > 0) {
+      const padX = 10;
+      const padY = 4;
+      const textH = Math.max(z.typedText.height, z.restText.height, z.kind === "boss" ? 44 : 34);
+      const pillW = total + padX * 2;
+      const pillH = textH + padY * 2;
+      const pillX = -total / 2 - padX;
+      const pillY = top - textH - padY;
+      const radius = 8;
+      z.labelBg.fillStyle(0x000000, 0.75);
+      z.labelBg.fillRoundedRect(pillX, pillY, pillW, pillH, radius);
+      z.labelBg.lineStyle(1.5, 0xffffff, 0.25);
+      z.labelBg.strokeRoundedRect(pillX, pillY, pillW, pillH, radius);
+    }
   }
 
   // ---------- vstup ----------
@@ -507,7 +526,7 @@ export class LevelScene extends Phaser.Scene {
     const lane = counts.indexOf(Math.max(...counts));
     const y = LANE_TOP + lane * LANE_H + LANE_H - 6;
     const sprite = this.add.image(HOUSE_X + 70, y, TEX.tower).setOrigin(0.5, 1).setDepth(5);
-    const towerScale = 78 / sprite.height;
+    const towerScale = 116 / sprite.height;
     this.tweens.add({ targets: sprite, scale: { from: 0, to: towerScale }, duration: 250, ease: "Back.out" });
     this.towers.push({ lane, sprite, expiresAt: this.time.now + 20000, nextShotAt: this.time.now + 800 });
     this.score += 50;

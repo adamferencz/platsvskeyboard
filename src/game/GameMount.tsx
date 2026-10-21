@@ -34,11 +34,13 @@ export default function GameMount({
   onExit,
   resultOverlay,
 }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
   const [muted, setMuted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [damaged, setDamaged] = useState(false);
   const prevLivesRef = useRef<number | null>(null);
@@ -65,6 +67,48 @@ export default function GameMount({
       prevLivesRef.current = hud.lives;
     }
   }, [hud?.lives]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element };
+      const isFs = Boolean(document.fullscreenElement || doc.webkitFullscreenElement);
+      setIsFullscreen(isFs);
+      setTimeout(() => {
+        gameRef.current?.scale.refresh();
+      }, 50);
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = () => {
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element;
+      webkitExitFullscreen?: () => Promise<void>;
+    };
+    const el = containerRef.current as (HTMLDivElement & {
+      webkitRequestFullscreen?: () => Promise<void>;
+    }) | null;
+
+    if (!document.fullscreenElement && !doc.webkitFullscreenElement) {
+      if (el?.requestFullscreen) {
+        el.requestFullscreen().catch(() => {});
+      } else if (el?.webkitRequestFullscreen) {
+        el.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if (doc.webkitExitFullscreen) {
+        doc.webkitExitFullscreen();
+      }
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -127,9 +171,25 @@ export default function GameMount({
   const combo = hud?.combo ?? 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1280px] select-none">
-      <div className="relative">
-        <div ref={parentRef} className="aspect-video w-full overflow-hidden rounded-xl bg-[#1e2a24] shadow-2xl" />
+    <div
+      ref={containerRef}
+      className={`mx-auto w-full select-none ${
+        isFullscreen
+          ? "fixed inset-0 z-50 flex h-screen w-screen flex-col items-center justify-center bg-black"
+          : "max-w-[1280px]"
+      }`}
+    >
+      <div
+        className={`relative aspect-video w-full ${
+          isFullscreen ? "max-h-screen max-w-[calc(100vh*16/9)]" : ""
+        }`}
+      >
+        <div
+          ref={parentRef}
+          className={`absolute inset-0 overflow-hidden bg-[#1e2a24] shadow-2xl ${
+            isFullscreen ? "rounded-none" : "rounded-xl"
+          }`}
+        />
 
         {/* Damage flash vignette */}
         {damaged && (
@@ -227,6 +287,52 @@ export default function GameMount({
             >
               {(hud?.muted ?? muted) ? "🔇" : "🔊"}
             </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.currentTarget.blur();
+                toggleFullscreen();
+              }}
+              aria-label={isFullscreen ? "Ukončit celou obrazovku" : "Celá obrazovka"}
+              title={isFullscreen ? "Ukončit celou obrazovku" : "Celá obrazovka"}
+              className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-lg bg-black/55 text-zinc-200 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white active:scale-95 cursor-pointer"
+            >
+              {isFullscreen ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 3v3a2 2 0 0 1-2 2H3" />
+                  <path d="M21 8h-3a2 2 0 0 1-2-2V3" />
+                  <path d="M3 16h3a2 2 0 0 1 2 2v3" />
+                  <path d="M16 21v-3a2 2 0 0 1 2-2h3" />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+                  <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+                  <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+                  <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+                </svg>
+              )}
+            </button>
           <div className="rounded-xl border border-amber-500/40 bg-gradient-to-b from-amber-950/60 via-zinc-950/85 to-black/90 px-4 py-2 text-right backdrop-blur-md shadow-xl">
             <div className="flex items-baseline justify-end gap-1.5">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-400/80">Skóre</span>
@@ -322,8 +428,8 @@ export default function GameMount({
         {resultOverlay}
       </div>
 
-      {/* Vizuální nápověda prstokladu pod herním plátnem */}
-      <div className="mt-3">
+      {/* Vizuální nápověda prstokladu pod herním plátnem (v celé obrazovce schovaná) */}
+      <div className={isFullscreen ? "hidden" : "mt-3"}>
         <FingeringDiagram expectedChar={hud?.expectedChar} initialLayout={layout} />
       </div>
     </div>
