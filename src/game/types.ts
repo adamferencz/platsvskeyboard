@@ -29,7 +29,16 @@ export interface RunResult {
   keystrokes: [number, 0 | 1][];
 }
 
-export type BoostType = "turret" | "bomb" | "freeze" | "heal";
+export type TurretKind = "basic" | "ice" | "knockback" | "explosive";
+
+export type BoostType =
+  | "turret"
+  | "turret_ice"
+  | "turret_knockback"
+  | "turret_explosive"
+  | "bomb"
+  | "freeze"
+  | "heal";
 
 export interface BoostState {
   type: BoostType;
