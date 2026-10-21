@@ -698,7 +698,7 @@ export class LevelScene extends Phaser.Scene {
       }
       if (this.time.now < tw.nextShotAt) continue;
       const target = this.zombies
-        .filter((z) => !z.dead && z.lane === tw.lane)
+        .filter((z) => !z.dead && z.lane === tw.lane && z.container.x <= W - 20)
         .sort((a, b) => a.container.x - b.container.x)[0];
       if (!target) continue;
       tw.nextShotAt = this.time.now + 1600;
