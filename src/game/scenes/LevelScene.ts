@@ -124,6 +124,8 @@ export class LevelScene extends Phaser.Scene {
     this.bonusTyped = 0;
     this.bonusLock = false;
     this.killsSinceBonus = 0;
+    this.startAt = 0;
+    this.hudTimer = 0;
   }
 
   create() {
@@ -601,6 +603,8 @@ export class LevelScene extends Phaser.Scene {
     }
     this.spawnEvent?.remove();
     this.startTimer?.remove();
+    this.input_.disableCapture();
+    this.tweens.pauseAll();
     if (won) {
       soundManager.playVictory();
     } else {

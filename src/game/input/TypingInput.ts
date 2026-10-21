@@ -19,6 +19,7 @@ export class TypingInput {
   private composing = false;
   private disposed = false;
   private paused = false;
+  private capturing = true;
 
   constructor(container: HTMLElement, handlers: TypingHandlers) {
     this.handlers = handlers;
@@ -51,11 +52,11 @@ export class TypingInput {
   }
 
   focus = () => {
-    if (!this.disposed && !this.paused) this.el.focus({ preventScroll: true });
+    if (!this.disposed && !this.paused && this.capturing) this.el.focus({ preventScroll: true });
   };
 
   private refocusSoon = () => {
-    if (this.disposed || this.paused) return;
+    if (this.disposed || this.paused || !this.capturing) return;
     setTimeout(this.focus, 0);
   };
 
@@ -72,17 +73,34 @@ export class TypingInput {
     return this.paused;
   }
 
+  disableCapture() {
+    this.capturing = false;
+    this.el.blur();
+  }
+
+  enableCapture() {
+    this.capturing = true;
+    this.focus();
+  }
+
+  isCapturing(): boolean {
+    return this.capturing && !this.disposed;
+  }
+
   private onCompStart = () => {
+    if (!this.capturing) return;
     this.composing = true;
   };
 
   private onCompEnd = (e: CompositionEvent) => {
+    if (!this.capturing) return;
     this.composing = false;
     this.emitText(e.data ?? "");
     this.el.value = "";
   };
 
   private onInput = (e: Event) => {
+    if (!this.capturing) return;
     if (this.paused) {
       this.el.value = "";
       return;
@@ -97,7 +115,7 @@ export class TypingInput {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (e.isComposing) return;
+    if (!this.capturing || e.isComposing) return;
     if (e.key === "Escape") {
       e.preventDefault();
       this.handlers.onEscape?.();

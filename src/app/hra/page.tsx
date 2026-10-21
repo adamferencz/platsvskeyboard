@@ -13,6 +13,7 @@ import { getProgress, saveRun } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "@/components/Kbd";
+import { bridge } from "@/game/bridge";
 
 const GameMount = dynamic(() => import("@/game/GameMount"), { ssr: false });
 
@@ -63,6 +64,13 @@ function Game() {
     [user, profile],
   );
 
+  const handleRetry = useCallback(() => {
+    setResult(null);
+    setSuspicious(null);
+    setAttempt((a) => a + 1);
+    bridge.emitTyped("restart-level");
+  }, []);
+
   const locked = progress !== undefined && chapter > (progress?.unlockedChapter ?? 1);
   // na chybových stránkách vede Enter i Esc zpět na mapu
   useHotkeys({ Enter: () => router.push("/"), Escape: () => router.push("/") }, { enabled: !valid || locked });
@@ -93,6 +101,7 @@ function Game() {
   const hasNext = round < ROUNDS_PER_CHAPTER || chapter < CHAPTERS.length;
   const goNext = () => {
     setResult(null);
+    setSuspicious(null);
     if (round < ROUNDS_PER_CHAPTER) router.push(`/hra?c=${chapter}&r=${round + 1}`);
     else router.push(`/hra?c=${chapter + 1}&r=1`);
   };
@@ -106,35 +115,33 @@ function Game() {
         <span>Esc = pauza · piš rovnou, není potřeba nikam klikat</span>
       </div>
 
-      {!result && (
-        <GameMount
-          key={`${chapter}-${round}-${attempt}`}
-          chapter={chapter}
-          round={round}
-          keyStats={progress?.keyStats ?? {}}
-          playerCpm={progress?.bestCpm ?? 0}
-          layout={profile?.layout ?? "qwertz"}
-          onFinished={onFinished}
-          onExit={() => router.push("/")}
-        />
-      )}
-
-      {result && (
-        <ResultCard
-          result={result}
-          saving={saving}
-          saveError={saveError}
-          suspicious={suspicious}
-          hasNext={hasNext}
-          onRetry={() => {
-            setResult(null);
-            setSuspicious(null);
-            setAttempt((a) => a + 1);
-          }}
-          onNext={goNext}
-          onMap={() => router.push("/")}
-        />
-      )}
+      <GameMount
+        key={`${chapter}-${round}`}
+        chapter={chapter}
+        round={round}
+        keyStats={progress?.keyStats ?? {}}
+        playerCpm={progress?.bestCpm ?? 0}
+        layout={profile?.layout ?? "qwertz"}
+        onFinished={onFinished}
+        onExit={() => router.push("/")}
+        resultOverlay={
+          result ? (
+            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-xl bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-200 select-auto">
+              <ResultCard
+                className="mt-0 w-full"
+                result={result}
+                saving={saving}
+                saveError={saveError}
+                suspicious={suspicious}
+                hasNext={hasNext}
+                onRetry={handleRetry}
+                onNext={goNext}
+                onMap={() => router.push("/")}
+              />
+            </div>
+          ) : null
+        }
+      />
     </div>
   );
 }
