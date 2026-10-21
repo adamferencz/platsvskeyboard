@@ -8,6 +8,7 @@ import { roundConfig, type RoundConfig, type ZombieKind } from "../content/level
 import { WordGenerator, type KeyStat, type WordList } from "../content/words";
 import { TypingInput } from "../input/TypingInput";
 import { accuracy, grossCpm, netCpm, stars } from "@/lib/scoring";
+import { soundManager } from "../audio/soundManager";
 import type { HudState, RunResult } from "../types";
 import { TEX } from "./BootScene";
 
@@ -174,7 +175,16 @@ export class LevelScene extends Phaser.Scene {
     this.time.delayedCall(3000, startGame);
     this.events.once("first-key", startGame);
 
+    const offToggleMute = bridge.onTyped("toggle-mute", () => {
+      soundManager.toggleMute();
+    });
+    const offSoundMute = soundManager.addListener(() => {
+      this.emitHud();
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      offToggleMute();
+      offSoundMute();
       this.input_.dispose();
       this.spawnEvent?.remove();
     });
@@ -355,6 +365,7 @@ export class LevelScene extends Phaser.Scene {
   private hit(z: Zombie, ch: string, t: number) {
     const expected = z.word[z.typed];
     if (ch === expected) {
+      soundManager.playKeystroke(this.combo);
       this.registerKey(expected, true, t);
       z.typed++;
       this.layoutLabel(z);
@@ -365,6 +376,7 @@ export class LevelScene extends Phaser.Scene {
         this.emitHud();
       }
     } else {
+      soundManager.playTypo();
       this.registerKey(expected, false, t);
       this.tweens.add({ targets: z.container, x: z.container.x + 6, duration: 40, yoyo: true, repeat: 2 });
     }
@@ -398,6 +410,7 @@ export class LevelScene extends Phaser.Scene {
   private kill(z: Zombie) {
     z.dead = true;
     this.kills++;
+    soundManager.playZombieDefeat();
     this.tweens.killTweensOf(z.sprite);
     this.tweens.add({
       targets: z.container,
@@ -420,6 +433,7 @@ export class LevelScene extends Phaser.Scene {
   }
 
   private miss(ch: string, t: number) {
+    soundManager.playTypo();
     this.registerKey(ch, false, t);
     this.combo = 0;
     this.cameras.main.shake(80, 0.002);
@@ -451,6 +465,7 @@ export class LevelScene extends Phaser.Scene {
   private hitBonus(ch: string, t: number) {
     const expected = this.bonusWord![this.bonusTyped];
     if (ch === expected) {
+      soundManager.playKeystroke(this.combo);
       this.registerKey(expected, true, t);
       this.bonusTyped++;
       if (this.bonusTyped >= this.bonusWord!.length) {
@@ -460,6 +475,7 @@ export class LevelScene extends Phaser.Scene {
         this.bonusLock = false;
       }
     } else {
+      soundManager.playTypo();
       this.registerKey(expected, false, t);
       this.bonusTyped = 0;
       this.bonusLock = false;
@@ -491,6 +507,7 @@ export class LevelScene extends Phaser.Scene {
         .sort((a, b) => a.container.x - b.container.x)[0];
       if (!target) continue;
       tw.nextShotAt = this.time.now + 2500;
+      soundManager.playTowerShot();
       const bullet = this.add.image(tw.sprite.x + 20, tw.sprite.y - tw.sprite.displayHeight * 0.65, TEX.bullet).setDepth(20);
       this.tweens.add({
         targets: bullet,
@@ -539,6 +556,7 @@ export class LevelScene extends Phaser.Scene {
     this.combo = 0;
     if (this.locked === z) this.locked = null;
     z.dead = true;
+    soundManager.playHouseBreach();
     this.tweens.killTweensOf(z.sprite);
     z.container.destroy();
     this.cameras.main.shake(200, 0.01);
@@ -559,6 +577,11 @@ export class LevelScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.spawnEvent?.remove();
+    if (won) {
+      soundManager.playVictory();
+    } else {
+      soundManager.playDefeat();
+    }
     const durationMs = Math.max(1, Math.round(performance.now() - this.startAt));
     const m = { correct: this.correct, errors: this.errors, durationMs };
     const acc = accuracy(m);
@@ -620,6 +643,7 @@ export class LevelScene extends Phaser.Scene {
       bonusTyped: this.bonusTyped,
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
       expectedChar,
+      muted: soundManager.isMuted(),
     };
     bridge.emitTyped("hud", state);
   }
