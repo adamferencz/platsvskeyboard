@@ -27,6 +27,27 @@ export interface RunResult {
   keyStats: Record<string, KeyStat>;
   /** [t ms od začátku, 1 = správně / 0 = chyba] */
   keystrokes: [number, 0 | 1][];
+  zenMode?: boolean;
+}
+
+export type TurretKind = "basic" | "ice" | "knockback" | "explosive";
+
+export type BoostType =
+  | "turret"
+  | "turret_ice"
+  | "turret_knockback"
+  | "turret_explosive"
+  | "bomb"
+  | "freeze"
+  | "heal";
+
+export interface BoostState {
+  type: BoostType;
+  title: string;
+  icon: string;
+  word: string;
+  typed: number;
+  locked: boolean;
 }
 
 export interface HudState {
@@ -36,5 +57,9 @@ export interface HudState {
   remaining: number;
   bonusWord: string | null;
   bonusTyped: number;
+  boost: BoostState | null;
   boss: { hp: number; maxHp: number } | null;
+  expectedChar?: string | null;
+  muted?: boolean;
 }
+

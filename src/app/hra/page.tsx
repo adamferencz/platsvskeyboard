@@ -9,7 +9,7 @@ import { ResultCard } from "@/components/ResultCard";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, chapterById } from "@/game/content/curriculum";
 import type { RunResult } from "@/game/types";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { getProgress, saveRun } from "@/lib/firestore/runs";
+import { getProgress, saveRun, saveZenPractice } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "@/components/Kbd";
@@ -32,6 +32,8 @@ function Game() {
   const { user, profile } = useAuth();
   const chapter = Number(params.get("c") ?? 1);
   const round = Number(params.get("r") ?? 1);
+  const isZenFromQuery = params.get("zen") === "1" || params.get("zen") === "true";
+  const [zenMode, setZenMode] = useState(isZenFromQuery);
   const valid = !!chapterById(chapter) && round >= 1 && round <= ROUNDS_PER_CHAPTER;
 
   const [progress, setProgress] = useState<ProgressDoc | null | undefined>(undefined);
@@ -42,8 +44,23 @@ function Game() {
   const [suspicious, setSuspicious] = useState<string | null>(null);
 
   useEffect(() => {
+    const isZen = params.get("zen") === "1" || params.get("zen") === "true";
+    setZenMode(isZen);
+  }, [params]);
+
+  useEffect(() => {
     if (user) getProgress(user.uid).then(setProgress);
   }, [user, attempt, chapter, round]);
+
+  const toggleZenMode = (enabled: boolean) => {
+    setResult(null);
+    setSuspicious(null);
+    setZenMode(enabled);
+    const url = enabled
+      ? `/hra?c=${chapter}&r=${round}&zen=1`
+      : `/hra?c=${chapter}&r=${round}`;
+    router.replace(url);
+  };
 
   const onFinished = useCallback(
     async (r: RunResult) => {
@@ -52,16 +69,30 @@ function Game() {
       setSaving(true);
       setSaveError(null);
       try {
-        const out = await saveRun(user.uid, profile, r);
-        setSuspicious(out.suspicious);
+        if (r.zenMode || zenMode) {
+          // Zen režim: ukládá se pouze osobní procvičování do keyStats, nikdy do soutěžních žebříčků
+          const out = await saveZenPractice(user.uid, r);
+          setProgress(out.progress);
+          setSuspicious(null);
+        } else {
+          const out = await saveRun(user.uid, profile, r);
+          setSuspicious(out.suspicious);
+        }
       } catch (e) {
         setSaveError((e as Error).message);
       } finally {
         setSaving(false);
       }
     },
-    [user, profile],
+    [user, profile, zenMode],
   );
+
+  const handleRetry = useCallback(() => {
+    setResult(null);
+    setSuspicious(null);
+    // nové kolo se znovu připojí (attempt je v key), aby dostalo čerstvé keyStats a playerCpm
+    setAttempt((a) => a + 1);
+  }, []);
 
   const locked = progress !== undefined && chapter > (progress?.unlockedChapter ?? 1);
   // na chybových stránkách vede Enter i Esc zpět na mapu
@@ -93,47 +124,75 @@ function Game() {
   const hasNext = round < ROUNDS_PER_CHAPTER || chapter < CHAPTERS.length;
   const goNext = () => {
     setResult(null);
-    if (round < ROUNDS_PER_CHAPTER) router.push(`/hra?c=${chapter}&r=${round + 1}`);
-    else router.push(`/hra?c=${chapter + 1}&r=1`);
+    setSuspicious(null);
+    const zenQ = zenMode ? "&zen=1" : "";
+    if (round < ROUNDS_PER_CHAPTER) router.push(`/hra?c=${chapter}&r=${round + 1}${zenQ}`);
+    else router.push(`/hra?c=${chapter + 1}&r=1${zenQ}`);
   };
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between text-sm text-zinc-400">
-        <Link href="/" className="hover:text-white">
-          ← Mapa
-        </Link>
-        <span>Esc = zpět na mapu · piš rovnou, není potřeba nikam klikat</span>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-400">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="hover:text-white">
+            ← Mapa
+          </Link>
+          <div className="inline-flex rounded-lg bg-zinc-800/80 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => toggleZenMode(false)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                !zenMode
+                  ? "bg-zinc-700 font-semibold text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              ⚡ Standardní hra
+            </button>
+            <button
+              type="button"
+              onClick={() => toggleZenMode(true)}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                zenMode
+                  ? "bg-emerald-600 font-semibold text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              🧘 Zen trénink
+            </button>
+          </div>
+        </div>
+        <span>Esc = pauza · piš rovnou, není potřeba nikam klikat</span>
       </div>
 
-      {!result && (
-        <GameMount
-          key={`${chapter}-${round}-${attempt}`}
-          chapter={chapter}
-          round={round}
-          keyStats={progress?.keyStats ?? {}}
-          playerCpm={progress?.bestCpm ?? 0}
-          onFinished={onFinished}
-          onExit={() => router.push("/")}
-        />
-      )}
-
-      {result && (
-        <ResultCard
-          result={result}
-          saving={saving}
-          saveError={saveError}
-          suspicious={suspicious}
-          hasNext={hasNext}
-          onRetry={() => {
-            setResult(null);
-            setSuspicious(null);
-            setAttempt((a) => a + 1);
-          }}
-          onNext={goNext}
-          onMap={() => router.push("/")}
-        />
-      )}
+      <GameMount
+        key={`${chapter}-${round}-${attempt}-${zenMode ? "zen" : "std"}`}
+        chapter={chapter}
+        round={round}
+        keyStats={progress?.keyStats ?? {}}
+        playerCpm={progress?.bestCpm ?? 0}
+        layout={profile?.layout ?? "qwertz"}
+        zenMode={zenMode}
+        onFinished={onFinished}
+        onExit={() => router.push("/")}
+        resultOverlay={
+          result ? (
+            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-xl bg-black/65 p-4 backdrop-blur-sm animate-in fade-in duration-200 select-auto">
+              <ResultCard
+                className="mt-0 w-full"
+                result={result}
+                saving={saving}
+                saveError={saveError}
+                suspicious={suspicious}
+                hasNext={hasNext}
+                onRetry={handleRetry}
+                onNext={goNext}
+                onMap={() => router.push("/")}
+              />
+            </div>
+          ) : null
+        }
+      />
     </div>
   );
 }

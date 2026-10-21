@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { RequireAuth } from "@/components/RequireAuth";
+import { KeyboardHeatmap } from "@/components/KeyboardHeatmap";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getMyGrade, requestGrade } from "@/lib/firestore/grades";
 import { getProgress } from "@/lib/firestore/runs";
@@ -9,6 +11,7 @@ import type { GradeDoc, Layout, ProgressDoc } from "@/lib/firestore/types";
 import { updateUserProfile } from "@/lib/firestore/user";
 import { GRADE_THRESHOLDS, gradeForCompletion, nextGradeThreshold } from "@/lib/grading";
 import { TRACK_LENGTH, classId, schoolYearKey, type Track } from "@/lib/schoolYear";
+import { getWeakKeys } from "@/lib/keyboard";
 
 export default function ProfilePage() {
   return (
@@ -44,6 +47,11 @@ function Profile() {
     }
   }, [profile]);
 
+  // Seznam nejslabších kláves pro panel doporučení
+  const weakKeys = useMemo(() => {
+    return getWeakKeys(progress?.keyStats, layout, 5, 3);
+  }, [progress?.keyStats, layout]);
+
   if (!user || !profile) return null;
   const year = schoolYearKey();
   const completion = progress?.courseCompletion ?? 0;
@@ -74,7 +82,16 @@ function Profile() {
     setBusy(true);
     setMsg(null);
     try {
-      await requestGrade(user!.uid, { ...profile!, displayName: name, track: (track || null) as Track | null, gradYear: gradYear ? Number(gradYear) : null }, completion);
+      await requestGrade(
+        user!.uid,
+        {
+          ...profile!,
+          displayName: name,
+          track: (track || null) as Track | null,
+          gradYear: gradYear ? Number(gradYear) : null,
+        },
+        completion
+      );
       setGrade(await getMyGrade(user!.uid));
       setMsg("Žádost odeslána, učitel ji uvidí ve své správě.");
     } catch (e) {
@@ -84,97 +101,212 @@ function Profile() {
     }
   }
 
-  return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">
-        <h1 className="mb-4 text-xl font-bold">Profil</h1>
-        <form
-          className="space-y-4 text-sm"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <Field label="E-mail">
-            <span className="text-zinc-300">{profile.email}</span>
-          </Field>
-          <Field label="Jméno v žebříčku">
-            <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
-          </Field>
-          <Field label="Rok maturity" hint="Z e-mailu se doplní sám (2027anovak → 2027).">
-            <input value={gradYear} onChange={(e) => setGradYear(e.target.value.replace(/\D/g, "").slice(0, 4))} className="input w-28" inputMode="numeric" />
-          </Field>
-          <Field label="Studium" hint="A = osmileté, C a D = čtyřleté. Podle toho se spočítá třída.">
-            <select value={track} onChange={(e) => setTrack(e.target.value as Track | "")} className="input w-56">
-              <option value="">— vyber —</option>
-              {(Object.keys(TRACK_LENGTH) as Track[]).map((t) => (
-                <option key={t} value={t}>
-                  {t} ({TRACK_LENGTH[t]}leté)
-                </option>
-              ))}
-            </select>
-            {cls && <span className="ml-3 text-zinc-300">→ letos {cls}</span>}
-          </Field>
-          <Field label="Klávesnice" hint="Hra čte znaky, které skutečně píšeš; nastavení ovlivní jen nápovědu prstokladu.">
-            <select value={layout} onChange={(e) => setLayout(e.target.value as Layout)} className="input w-56">
-              <option value="qwertz">Česká QWERTZ</option>
-              <option value="qwerty">Česká QWERTY (prohozené Z/Y)</option>
-            </select>
-          </Field>
-          <button type="submit" disabled={busy} className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50">
-            Uložit
-          </button>
-          <span className="ml-3 text-xs text-zinc-500">Enter v políčku uloží.</span>
-        </form>
-      </section>
+  const primaryWeakKey = weakKeys[0];
 
-      <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">
-        <h2 className="mb-4 text-xl font-bold">Známka za školní rok {year}</h2>
-        <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
-          <Tile label="Kurz splněn" value={`${completion} %`} />
-          <Tile label="Vyšla by známka" value={offered ?? "—"} />
-          <Tile label="Nejlepší čisté úhozy/min" value={progress?.bestNetCpm ?? 0} />
-          <Tile label="Odehraná kola" value={progress?.totalRuns ?? 0} />
+  return (
+    <div className="space-y-6">
+      {/* Horní sekce: Nastavení profilu + Známka */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">
+          <h1 className="mb-4 text-xl font-bold">Profil</h1>
+          <div className="space-y-4 text-sm">
+            <Field label="E-mail">
+              <span className="text-zinc-300">{profile.email}</span>
+            </Field>
+            <Field label="Jméno v žebříčku">
+              <input value={name} onChange={(e) => setName(e.target.value)} className="input" />
+            </Field>
+            <Field label="Rok maturity" hint="Z e-mailu se doplní sám (2027anovak → 2027).">
+              <input
+                value={gradYear}
+                onChange={(e) => setGradYear(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                className="input w-28"
+                inputMode="numeric"
+              />
+            </Field>
+            <Field label="Studium" hint="A = osmileté, C a D = čtyřleté. Podle toho se spočítá třída.">
+              <select value={track} onChange={(e) => setTrack(e.target.value as Track | "")} className="input w-56">
+                <option value="">— vyber —</option>
+                {(Object.keys(TRACK_LENGTH) as Track[]).map((t) => (
+                  <option key={t} value={t}>
+                    {t} ({TRACK_LENGTH[t]}leté)
+                  </option>
+                ))}
+              </select>
+              {cls && <span className="ml-3 text-zinc-300">→ letos {cls}</span>}
+            </Field>
+            <Field label="Klávesnice" hint="Hra čte znaky, které skutečně píšeš; nastavení ovlivní nápovědu prstokladu i heatmapu.">
+              <select value={layout} onChange={(e) => setLayout(e.target.value as Layout)} className="input w-56">
+                <option value="qwertz">Česká QWERTZ</option>
+                <option value="qwerty">Česká QWERTY (prohozené Z/Y)</option>
+              </select>
+            </Field>
+            <button
+              onClick={() => void save()}
+              disabled={busy}
+              className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50 transition"
+            >
+              Uložit
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5">
+          <h2 className="mb-4 text-xl font-bold">Známka za školní rok {year}</h2>
+          <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
+            <Tile label="Kurz splněn" value={`${completion} %`} />
+            <Tile label="Vyšla by známka" value={offered ?? "—"} />
+            <Tile label="Nejlepší čisté úhozy/min" value={progress?.bestNetCpm ?? 0} />
+            <Tile label="Odehraná kola" value={progress?.totalRuns ?? 0} />
+          </div>
+
+          <table className="mb-4 w-full text-sm">
+            <tbody>
+              {GRADE_THRESHOLDS.map((t) => (
+                <tr key={t.grade} className={offered === t.grade ? "text-emerald-400" : "text-zinc-400"}>
+                  <td className="py-0.5">od {t.min} %</td>
+                  <td className="py-0.5 text-right font-semibold">známka {t.grade}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {next && (
+            <p className="mb-4 text-sm text-zinc-400">
+              Do známky {next.grade} chybí {Math.max(0, Math.round((next.min - completion) * 10) / 10)} %.
+            </p>
+          )}
+
+          {grade?.locked ? (
+            <p className="rounded-lg bg-emerald-900/40 p-3 text-sm text-emerald-200">
+              Známka <b>{grade.gradeOffered}</b> byla zapsána do předmětu <b>{grade.subject}</b> ({grade.recordedBy}). Letos už další žádost nejde.
+            </p>
+          ) : grade?.status === "requested" ? (
+            <p className="rounded-lg bg-amber-900/40 p-3 text-sm text-amber-200">
+              Žádost o známku <b>{grade.gradeOffered}</b> (za {grade.completionAtClaim} %) čeká na učitele.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {grade?.status === "rejected" && (
+                <p className="text-sm text-red-300">Poslední žádost učitel zamítl. Můžeš požádat znovu.</p>
+              )}
+              <button
+                onClick={() => void claim()}
+                disabled={busy || !offered}
+                className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50 transition"
+              >
+                Požádat o zapsání známky {offered ?? ""}
+              </button>
+              <p className="text-xs text-zinc-500">Je to dobrovolné. Po zapsání se možnost na tento školní rok zamkne.</p>
+            </div>
+          )}
+          {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+        </section>
+      </div>
+
+      {/* Sekce: Doporučení k procvičení (Weak keys recommendations) */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-900 p-5 shadow-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/5 pb-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-xl font-bold text-white">
+              <svg className="h-5 w-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Doporučení k procvičení
+            </h2>
+            <p className="mt-1 text-xs text-zinc-400">
+              Nejslabší klávesy s nejvyšší chybovostí (minimálně 3 pokusy). Klikni na tlačítko pro zacílený trénink se zombíky.
+            </p>
+          </div>
+
+          {primaryWeakKey && (
+            <Link
+              href={`/hra?c=${primaryWeakKey.chapterId}&r=1`}
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-600 to-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg hover:from-amber-500 hover:to-rose-500 transition duration-150"
+            >
+              <span>Procvičit slabé klávesy</span>
+              <span className="rounded bg-black/30 px-1.5 py-0.5 text-xs font-mono font-normal">
+                Kapitola {primaryWeakKey.chapterId}
+              </span>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
         </div>
 
-        <table className="mb-4 w-full text-sm">
-          <tbody>
-            {GRADE_THRESHOLDS.map((t) => (
-              <tr key={t.grade} className={offered === t.grade ? "text-emerald-400" : "text-zinc-400"}>
-                <td className="py-0.5">od {t.min} %</td>
-                <td className="py-0.5 text-right font-semibold">známka {t.grade}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {next && (
-          <p className="mb-4 text-sm text-zinc-400">
-            Do známky {next.grade} chybí {Math.max(0, Math.round((next.min - completion) * 10) / 10)} %.
-          </p>
-        )}
+        {weakKeys.length > 0 ? (
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            {weakKeys.map((wk) => (
+              <div
+                key={wk.key}
+                className="group relative flex flex-col justify-between rounded-xl border border-white/5 bg-zinc-950/70 p-4 transition hover:border-white/20 hover:bg-zinc-950"
+              >
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-rose-600/20 text-2xl font-bold font-mono text-rose-300 border border-rose-500/40">
+                      {wk.displayKey}
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-block rounded-md bg-rose-950/80 px-2 py-0.5 text-xs font-bold text-rose-300 border border-rose-800/60">
+                        {wk.errorPercent} % chyb
+                      </span>
+                      <div className="mt-1 text-[11px] text-zinc-500">
+                        {wk.misses} chyb z {wk.total}
+                      </div>
+                    </div>
+                  </div>
 
-        {grade?.locked ? (
-          <p className="rounded-lg bg-emerald-900/40 p-3 text-sm text-emerald-200">
-            Známka <b>{grade.gradeOffered}</b> byla zapsána do předmětu <b>{grade.subject}</b> ({grade.recordedBy}). Letos už další žádost nejde.
-          </p>
-        ) : grade?.status === "requested" ? (
-          <p className="rounded-lg bg-amber-900/40 p-3 text-sm text-amber-200">
-            Žádost o známku <b>{grade.gradeOffered}</b> (za {grade.completionAtClaim} %) čeká na učitele.
-          </p>
+                  <div className="mt-3 space-y-1 text-xs">
+                    <div className="text-zinc-400">
+                      Prst: <span className="font-medium text-zinc-200">{wk.fingerName}</span>
+                    </div>
+                    <div className="text-zinc-400 truncate" title={`Kapitola ${wk.chapterId}: ${wk.chapterName}`}>
+                      Představeno: <span className="text-zinc-300">Kap. {wk.chapterId}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-white/5">
+                  <Link
+                    href={`/hra?c=${wk.chapterId}&r=1`}
+                    className="block w-full rounded-lg bg-zinc-800/80 py-1.5 text-center text-xs font-medium text-zinc-200 hover:bg-emerald-600 hover:text-white transition duration-150"
+                  >
+                    Procvičit klávesu →
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="space-y-2">
-            {grade?.status === "rejected" && <p className="text-sm text-red-300">Poslední žádost učitel zamítl. Můžeš požádat znovu.</p>}
-            <button
-              onClick={() => void claim()}
-              disabled={busy || !offered}
-              className="rounded-lg bg-emerald-600 px-4 py-2 font-medium hover:bg-emerald-500 disabled:opacity-50"
+          <div className="mt-4 flex flex-col items-center justify-center rounded-xl border border-dashed border-white/10 bg-zinc-950/40 p-8 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-950 text-emerald-400 mb-3 border border-emerald-800/50">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h3 className="text-base font-semibold text-white">Žádné slabé klávesy!</h3>
+            <p className="mt-1 max-w-md text-xs text-zinc-400">
+              {progress?.totalRuns && progress.totalRuns > 0
+                ? "Výborná práce! Všechny tvé klávesy s alespoň 3 pokusy mají vynikající přesnost. Pokračuj v hraní a zkoušej další kapitoly!"
+                : "Zatím nemáš odehraná žádná kola. Spusť své první kolo a začni sbírat statistiky úhozů!"}
+            </p>
+            <Link
+              href="/hra"
+              className="mt-4 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 transition"
             >
-              Požádat o zapsání známky {offered ?? ""}
-            </button>
-            <p className="text-xs text-zinc-500">Je to dobrovolné. Po zapsání se možnost na tento školní rok zamkne.</p>
+              Přejít do hry
+            </Link>
           </div>
         )}
-        {msg && <p className="mt-3 text-sm text-zinc-300">{msg}</p>}
+      </section>
+
+      {/* Sekce: Heatmapa chybovosti na klávesnici */}
+      <section>
+        <KeyboardHeatmap
+          keyStats={progress?.keyStats}
+          layout={layout}
+          onLayoutChange={(newLayout) => setLayout(newLayout)}
+        />
       </section>
 
       <style jsx global>{`

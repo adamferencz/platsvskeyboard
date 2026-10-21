@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, serverTimestamp, writeBatch, type Timestamp } from "firebase/firestore";
+import { collection, doc, getDoc, serverTimestamp, setDoc, writeBatch, type Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { classId as computeClassId, schoolYearKey } from "@/lib/schoolYear";
 import { suspicionReason } from "@/lib/scoring";
@@ -127,4 +127,40 @@ export async function saveRun(uid: string, profile: UserDoc, result: RunResult):
   await batch.commit();
 
   return { progress: { ...progress, updatedAt: serverTimestamp() as unknown as Timestamp }, suspicious };
+}
+
+/**
+ * Uloží tréninkový Zen běh:
+ * - Aktualizuje POUZE osobní `progress.keyStats` (a čas/počet běhů dle pravidel),
+ * - NIKDY nezapisuje do soutěžních `stats/{uid}_{year}` ani žebříčků,
+ * - Nezapisuje soutěžní body, hvězdičky ani neovlivňuje bestCpm / postup kurzem.
+ */
+export async function saveZenPractice(
+  uid: string,
+  result: RunResult,
+): Promise<{ progress: ProgressDoc; suspicious: null }> {
+  const prev = (await getProgress(uid)) ?? (emptyProgress() as ProgressDoc);
+
+  const keyStats = { ...prev.keyStats };
+  for (const [k, s] of Object.entries(result.keyStats)) {
+    keyStats[k] = { hits: s.hits, misses: s.misses };
+  }
+
+  const progress: Omit<ProgressDoc, "updatedAt"> = {
+    levels: prev.levels,
+    completedRounds: prev.completedRounds,
+    courseCompletion: prev.courseCompletion,
+    unlockedChapter: prev.unlockedChapter,
+    bestCpm: prev.bestCpm,
+    bestNetCpm: prev.bestNetCpm,
+    totalRuns: prev.totalRuns + 1,
+    // zen se do minut nepočítá — totalMinutes jde do soutěžního žebříčku „Nejpilnější“
+    totalMinutes: prev.totalMinutes,
+    totalScore: prev.totalScore,
+    keyStats,
+  };
+
+  await setDoc(doc(db, "progress", uid), { ...progress, updatedAt: serverTimestamp() });
+
+  return { progress: { ...progress, updatedAt: serverTimestamp() as unknown as Timestamp }, suspicious: null };
 }

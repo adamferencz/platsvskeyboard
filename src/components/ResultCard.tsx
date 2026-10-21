@@ -17,9 +17,20 @@ interface Props {
   onRetry: () => void;
   onNext: () => void;
   onMap: () => void;
+  className?: string;
 }
 
-export function ResultCard({ result, saving, saveError, suspicious, hasNext, onRetry, onNext, onMap }: Props) {
+export function ResultCard({
+  result,
+  saving,
+  saveError,
+  suspicious,
+  hasNext,
+  onRetry,
+  onNext,
+  onMap,
+  className,
+}: Props) {
   const worst = Object.entries(result.keyStats)
     .filter(([, s]) => s.misses > 0)
     .sort((a, b) => b[1].misses - a[1].misses)
@@ -53,7 +64,7 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
   );
 
   return (
-    <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-white/10 bg-zinc-900 p-6 text-white shadow-2xl">
+    <div className={`mx-auto max-w-xl rounded-2xl border border-white/10 bg-zinc-900 p-6 text-white shadow-2xl ${className ?? "mt-6"}`}>
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">{result.won ? "Kolo vyhráno!" : "Zombíci prošli…"}</h2>
         <div className="text-3xl text-yellow-400" aria-label={`${result.stars} hvězdičky`}>
@@ -61,6 +72,14 @@ export function ResultCard({ result, saving, saveError, suspicious, hasNext, onR
           <span className="text-white/20">{"★".repeat(3 - result.stars)}</span>
         </div>
       </div>
+
+      {result.zenMode && (
+        <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/60 px-3 py-1.5 text-sm font-medium text-emerald-300">
+          <span>🧘</span>
+          <span>Zen trénink (nesoutěžní)</span>
+          <span className="text-xs text-emerald-400/70">· výsledek neovlivňuje žebříček</span>
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Stat label="Čisté úhozy/min" value={result.netCpm} />

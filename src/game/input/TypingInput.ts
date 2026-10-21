@@ -11,6 +11,7 @@ export interface TypingHandlers {
   onChar: (ch: string, t: number) => void;
   onBackspace?: (t: number) => void;
   onEscape?: () => void;
+  onTab?: (t: number) => void;
 }
 
 export class TypingInput {
@@ -18,6 +19,8 @@ export class TypingInput {
   private handlers: TypingHandlers;
   private composing = false;
   private disposed = false;
+  private paused = false;
+  private capturing = true;
 
   constructor(container: HTMLElement, handlers: TypingHandlers) {
     this.handlers = handlers;
@@ -50,24 +53,59 @@ export class TypingInput {
   }
 
   focus = () => {
-    if (!this.disposed) this.el.focus({ preventScroll: true });
+    if (!this.disposed && !this.paused && this.capturing) this.el.focus({ preventScroll: true });
   };
 
   private refocusSoon = () => {
+    if (this.disposed || this.paused || !this.capturing) return;
     setTimeout(this.focus, 0);
   };
 
+  setPaused(paused: boolean) {
+    this.paused = paused;
+    if (paused) {
+      this.el.blur();
+    } else {
+      this.focus();
+    }
+  }
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  disableCapture() {
+    this.capturing = false;
+    this.el.blur();
+  }
+
+  enableCapture() {
+    this.capturing = true;
+    this.focus();
+  }
+
+  isCapturing(): boolean {
+    return this.capturing && !this.disposed;
+  }
+
   private onCompStart = () => {
+    if (!this.capturing) return;
     this.composing = true;
   };
 
   private onCompEnd = (e: CompositionEvent) => {
+    if (!this.capturing) return;
     this.composing = false;
     this.emitText(e.data ?? "");
     this.el.value = "";
   };
 
   private onInput = (e: Event) => {
+    if (!this.capturing) return;
+    if (this.paused) {
+      this.el.value = "";
+      return;
+    }
     const ev = e as InputEvent;
     if (this.composing || ev.isComposing) return;
     if (ev.inputType === "insertText" || ev.inputType === "insertFromPaste") {
@@ -78,12 +116,21 @@ export class TypingInput {
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
-    if (e.isComposing) return;
+    if (!this.capturing || e.isComposing) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      this.handlers.onEscape?.();
+      return;
+    }
+    if (this.paused) return;
     if (e.key === "Backspace") {
       e.preventDefault();
       this.handlers.onBackspace?.(performance.now());
-    } else if (e.key === "Escape") {
-      this.handlers.onEscape?.();
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const t = performance.now();
+      this.handlers.onTab?.(t);
+      this.handlers.onChar("Tab", t);
     }
   };
 

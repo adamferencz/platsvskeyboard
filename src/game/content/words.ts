@@ -72,37 +72,61 @@ export class WordGenerator {
     return worstScore > 0.08 ? worst : null;
   }
 
-  /** Náhodná pseudo-slabika (CV / CVC / VC) z dostupných písmen. */
-  private pseudoWord(len: number): string {
+  /** Náhodná pseudo-slabika (CV / CVC / VC) z dostupných písmen bez opakování stejného znaku za sebou. */
+  private pseudoWord(len: number, excludeInitial?: Set<string>): string {
     const vowels = this.letters.filter((l) => VOWELS.has(l));
     const cons = this.letters.filter((l) => !VOWELS.has(l));
     let out = "";
+    let lastCh = "";
     for (let i = 0; i < len; i++) {
-      const wantVowel = vowels.length > 0 && (i % 2 === 1 || cons.length === 0);
-      const src = wantVowel ? vowels : cons.length ? cons : this.letters;
-      out += src[Math.floor(this.rng() * src.length)];
+      let src: string[];
+      if (i === 0 && excludeInitial && excludeInitial.size > 0) {
+        const available = this.letters.filter((l) => !excludeInitial.has(l.toLowerCase()));
+        if (available.length > 0) {
+          src = available;
+        } else {
+          src = this.letters;
+        }
+      } else {
+        const wantVowel = vowels.length > 0 && (i % 2 === 1 || cons.length === 0);
+        src = wantVowel ? vowels : cons.length ? cons : this.letters;
+        if (src.length > 1) {
+          src = src.filter((c) => c !== lastCh);
+        }
+      }
+      const ch = src[Math.floor(this.rng() * src.length)];
+      out += ch;
+      lastCh = ch;
     }
     return out;
   }
 
   /** Text pro jednoho zombíka. */
-  next(): string {
+  next(excludeInitial?: Set<string>): string {
     const [minLen, maxLen] = this.lengthRange();
     let word: string;
     const useFocus = this.focusKey && this.rng() < 0.5;
-    const candidates = useFocus ? this.pool.filter((w) => w.includes(this.focusKey!)) : this.pool;
+    let candidates = useFocus ? this.pool.filter((w) => w.includes(this.focusKey!)) : this.pool;
+    if (excludeInitial && excludeInitial.size > 0) {
+      const filtered = candidates.filter((w) => !excludeInitial.has(w[0].toLowerCase()));
+      if (filtered.length > 0) candidates = filtered;
+    }
 
     if (candidates.length >= 8) {
       // častější slova mají větší šanci (pool je seřazený podle frekvence)
       const idx = Math.floor(Math.pow(this.rng(), 1.6) * candidates.length);
       word = candidates[idx];
     } else if (this.pool.length >= 8) {
-      word = this.pool[Math.floor(Math.pow(this.rng(), 1.6) * this.pool.length)];
+      const poolCandidates = excludeInitial && excludeInitial.size > 0
+        ? this.pool.filter((w) => !excludeInitial.has(w[0].toLowerCase()))
+        : this.pool;
+      const effectivePool = poolCandidates.length > 0 ? poolCandidates : this.pool;
+      word = effectivePool[Math.floor(Math.pow(this.rng(), 1.6) * effectivePool.length)];
     } else {
       const len = minLen + Math.floor(this.rng() * (maxLen - minLen + 1));
-      word = this.pseudoWord(len);
+      word = this.pseudoWord(len, excludeInitial);
       if (useFocus && this.focusKey && !word.includes(this.focusKey)) {
-        const pos = Math.floor(this.rng() * word.length);
+        const pos = Math.max(1, Math.floor(this.rng() * word.length));
         word = word.slice(0, pos) + this.focusKey + word.slice(pos + 1);
       }
     }
@@ -116,13 +140,30 @@ export class WordGenerator {
     return word;
   }
 
-  /** Bonusové slovo pro věž — delší než běžný text, jen z odemčených písmen. */
-  bonusWord(): string {
-    const longer = this.opts.words
-      .filter(([w]) => w.length >= 4 && w.length <= 8 && [...w].every((ch) => this.letters.includes(ch)))
+  /** Složitější slovo pro bůst — delší text než běžný zombík, jen z odemčených písmen. */
+  boostWord(excludeInitial?: Set<string>): string {
+    const c = this.opts.chapter.id;
+    const minLen = c <= 2 ? 4 : c <= 6 ? 5 : 6;
+    const maxLen = c <= 2 ? 5 : c <= 6 ? 7 : 9;
+    const allCandidates = this.opts.words
+      .filter(([w]) => w.length >= minLen && w.length <= maxLen && [...w].every((ch) => this.letters.includes(ch)))
       .slice(0, 400);
-    if (longer.length) return longer[Math.floor(this.rng() * longer.length)][0];
-    return this.pseudoWord(4);
+
+    const candidates = excludeInitial && excludeInitial.size > 0
+      ? allCandidates.filter(([w]) => !excludeInitial.has(w[0]?.toLowerCase()))
+      : allCandidates;
+
+    if (candidates.length > 0) {
+      return candidates[Math.floor(this.rng() * candidates.length)][0];
+    }
+    if (allCandidates.length > 0 && (!excludeInitial || excludeInitial.size === 0)) {
+      return allCandidates[Math.floor(this.rng() * allCandidates.length)][0];
+    }
+    return this.pseudoWord(minLen, excludeInitial);
+  }
+
+  bonusWord(excludeInitial?: Set<string>): string {
+    return this.boostWord(excludeInitial);
   }
 
   get focus(): string | null {
