@@ -9,7 +9,7 @@ import { WordGenerator, type KeyStat, type WordList } from "../content/words";
 import { TypingInput } from "../input/TypingInput";
 import { accuracy, grossCpm, netCpm, stars } from "@/lib/scoring";
 import { soundManager } from "../audio/soundManager";
-import type { HudState, RunResult } from "../types";
+import type { BoostState, BoostType, HudState, RunResult, TurretKind } from "../types";
 import { TEX } from "./BootScene";
 
 export interface LevelData {
@@ -47,9 +47,12 @@ interface Zombie {
   hp: number;
   maxHp: number;
   dead: boolean;
+  slowUntil?: number;
+  stunUntil?: number;
 }
 
-interface Tower {
+export interface Tower {
+  kind: TurretKind;
   lane: number;
   sprite: Phaser.GameObjects.Image;
   expiresAt: number;
@@ -88,10 +91,16 @@ export class LevelScene extends Phaser.Scene {
   private keystrokes: [number, 0 | 1][] = [];
   private keyStats: Record<string, KeyStat> = {};
 
-  private bonusWord: string | null = null;
-  private bonusTyped = 0;
-  private bonusLock = false;
-  private killsSinceBonus = 0;
+  private activeBoost: {
+    type: BoostType;
+    title: string;
+    icon: string;
+    word: string;
+    typed: number;
+  } | null = null;
+  private boostLocked = false;
+  private killsSinceBoost = 0;
+  private freezeUntil = 0;
 
   private hudTimer = 0;
   private spawnEvent?: Phaser.Time.TimerEvent;
@@ -126,10 +135,10 @@ export class LevelScene extends Phaser.Scene {
     this.correct = 0;
     this.errors = 0;
     this.keystrokes = [];
-    this.bonusWord = null;
-    this.bonusTyped = 0;
-    this.bonusLock = false;
-    this.killsSinceBonus = 0;
+    this.activeBoost = null;
+    this.boostLocked = false;
+    this.killsSinceBoost = 0;
+    this.freezeUntil = 0;
     this.startAt = 0;
     this.hudTimer = 0;
   }
@@ -179,6 +188,8 @@ export class LevelScene extends Phaser.Scene {
     });
     this.createCrosshair();
 
+    const offToggleBoost = bridge.onTyped("toggle-boost", (force?: boolean) => this.toggleBoostLock(force));
+
     const startGame = () => {
       if (this.started) return;
       this.started = true;
@@ -218,9 +229,15 @@ export class LevelScene extends Phaser.Scene {
     const offPause = bridge.onTyped("pause-level", () => this.setPaused(true));
     const offRestart = bridge.onTyped("restart-level", () => this.restartLevel());
 
+    // První bůst nabídneme krátce po začátku hry
+    this.time.delayedCall(3500, () => {
+      if (!this.activeBoost && !this.finished) this.offerBoost();
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       offToggleMute();
       offSoundMute();
+      offToggleBoost();
       this.input_.dispose();
       this.spawnEvent?.remove();
       this.startTimer?.remove();
@@ -336,13 +353,18 @@ export class LevelScene extends Phaser.Scene {
 
   /** V jedné chvíli nemají dva zombíci stejné první písmeno (ZType). */
   private uniqueWord(): string {
-    const taken = new Set(this.livingZombies().map((z) => z.word[0]?.toLowerCase()));
-    if (this.bonusWord) taken.add(this.bonusWord[0]);
-    for (let i = 0; i < 25; i++) {
-      const w = this.gen.next();
-      if (!taken.has(w[0].toLowerCase())) return w;
+    const taken = new Set(
+      this.zombies
+        .filter((z) => !z.dead)
+        .map((z) => z.word[0]?.toLowerCase())
+        .filter((c): c is string => Boolean(c))
+    );
+    if (this.activeBoost) taken.add(this.activeBoost.word[0].toLowerCase());
+    for (let i = 0; i < 30; i++) {
+      const w = this.gen.next(taken);
+      if (!taken.has(w[0]?.toLowerCase())) return w;
     }
-    return this.gen.next();
+    return this.gen.next(taken);
   }
 
   private addZombie(kind: ZombieKind, word: string, queue: string[]) {
@@ -388,8 +410,13 @@ export class LevelScene extends Phaser.Scene {
       hp: 1 + queue.length,
       maxHp: 1 + queue.length,
       dead: false,
+      slowUntil: 0,
+      stunUntil: 0,
     };
     this.layoutLabel(z);
+    if (this.time.now < this.freezeUntil) {
+      sprite.setTint(0x74b9ff);
+    }
     this.zombies.push(z);
 
     // houpání při chůzi (procedurální animace místo snímků)
@@ -446,19 +473,28 @@ export class LevelScene extends Phaser.Scene {
     if (this.finished || this.isPaused) return;
     this.events.emit("first-key");
     const t = Math.round(tAbs - this.startAt - this.totalPauseDurationMs);
-    if (ch === " ") return; // mezera zatím nic (slova jsou jednotlivá)
 
-    // 1) zamčený zombík
+    // Mezerník nebo Tab přepíná zaměření na bůst
+    if (ch === " " || ch === "\t" || ch === "Tab") {
+      if (this.activeBoost) {
+        this.toggleBoostLock();
+      }
+      return;
+    }
+
+    // 1) Pokud je hráč zamčený na bůst -> klávesy jdou výhradně na bůst
+    if (this.boostLocked && this.activeBoost) {
+      this.hitBoost(ch, t);
+      return;
+    }
+
+    // 2) Pokud je hráč zamčený na zombíka
     if (this.locked && !this.locked.dead) {
       this.hit(this.locked, ch, t);
       return;
     }
-    // 2) bonusové slovo rozepsané
-    if (this.bonusLock && this.bonusWord) {
-      this.hitBonus(ch, t);
-      return;
-    }
-    // 3) nový cíl: nejbližší zombík začínající znakem
+
+    // 3) Nový cíl mezi zombíky (nejbližší zombík začínající znakem)
     const target = this.zombies
       .filter((z) => !z.dead && z.word[0] === ch)
       .sort((a, b) => a.container.x - b.container.x)[0];
@@ -467,12 +503,14 @@ export class LevelScene extends Phaser.Scene {
       this.hit(target, ch, t);
       return;
     }
-    // 4) bonusové slovo
-    if (this.bonusWord && this.bonusWord[0] === ch) {
-      this.bonusLock = true;
-      this.hitBonus(ch, t);
+
+    // 4) Pokud žádný zombík nezačíná na tento znak, ale aktivní bůst ano
+    if (this.activeBoost && this.activeBoost.word[0] === ch) {
+      this.boostLocked = true;
+      this.hitBoost(ch, t);
       return;
     }
+
     this.miss(ch, t);
   }
 
@@ -504,12 +542,12 @@ export class LevelScene extends Phaser.Scene {
       return;
     }
 
-    if (this.bonusLock && this.bonusWord) {
-      if (isDoubleTap || this.bonusTyped <= 1) {
-        this.bonusTyped = 0;
-        this.bonusLock = false;
+    if (this.boostLocked && this.activeBoost) {
+      if (isDoubleTap || this.activeBoost.typed === 0) {
+        this.activeBoost.typed = 0;
+        this.boostLocked = false;
       } else {
-        this.bonusTyped--;
+        this.activeBoost.typed--;
       }
       this.emitHud();
     }
@@ -605,6 +643,20 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private toggleBoostLock(force?: boolean) {
+    if (!this.activeBoost || this.finished) return;
+    const nextLocked = force !== undefined ? force : !this.boostLocked;
+    this.boostLocked = nextLocked;
+    if (this.boostLocked) {
+      if (this.locked) {
+        this.locked.typed = 0;
+        this.layoutLabel(this.locked);
+        this.setLocked(null);
+      }
+    }
+    this.emitHud();
+  }
+
   private hit(z: Zombie, ch: string, t: number) {
     const expected = z.word[z.typed];
     if (ch === expected) {
@@ -633,7 +685,11 @@ export class LevelScene extends Phaser.Scene {
     z.hp--;
     if (z.queue.length > 0) {
       // boss / obrněný: další slovo
-      z.word = z.queue.shift()!;
+      let nextW = z.queue.shift()!;
+      if (this.activeBoost && nextW[0]?.toLowerCase() === this.activeBoost.word[0]?.toLowerCase()) {
+        nextW = this.uniqueWord();
+      }
+      z.word = nextW;
       z.typed = 0;
       this.layoutLabel(z);
       this.flash(z);
@@ -643,19 +699,23 @@ export class LevelScene extends Phaser.Scene {
     }
     this.kill(z);
     this.setLocked(null);
-    this.killsSinceBonus++;
-    if (this.cfg.bonusEvery && !this.bonusWord && this.killsSinceBonus >= this.cfg.bonusEvery) {
-      this.killsSinceBonus = 0;
-      this.offerBonus();
+    this.killsSinceBoost++;
+    if (!this.activeBoost && this.killsSinceBoost >= (this.cfg.bonusEvery || 3)) {
+      this.killsSinceBoost = 0;
+      this.offerBoost();
     }
   }
 
   private kill(z: Zombie) {
     z.dead = true;
+    if (this.locked === z) {
+      this.locked = null;
+    }
     this.kills++;
     soundManager.playZombieDefeat();
     this.updateZombieHighlight(z, false);
     this.tweens.killTweensOf(z.sprite);
+    this.tweens.killTweensOf(z.container);
     this.tweens.add({
       targets: z.container,
       angle: 90,
@@ -678,7 +738,13 @@ export class LevelScene extends Phaser.Scene {
   private flash(z: Zombie) {
     z.sprite.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
     this.time.delayedCall(80, () => {
-      if (z.sprite.active) z.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+      if (z.sprite.active) {
+        if (this.time.now < this.freezeUntil || (z.slowUntil && this.time.now < z.slowUntil)) {
+          z.sprite.setTint(0x74b9ff).setTintMode(Phaser.TintModes.MULTIPLY);
+        } else {
+          z.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+        }
+      }
     });
   }
 
@@ -703,76 +769,446 @@ export class LevelScene extends Phaser.Scene {
     this.keystrokes.push([t, ok ? 1 : 0]);
   }
 
-  // ---------- bonus a věže ----------
+  // ---------- bůsty a věže ----------
 
-  private offerBonus() {
-    this.bonusWord = this.gen.bonusWord();
-    this.bonusTyped = 0;
-    this.bonusLock = false;
+  private offerBoost() {
+    if (this.finished || this.activeBoost) return;
+    const types: BoostType[] = [
+      "turret",
+      "turret_ice",
+      "turret_knockback",
+      "turret_explosive",
+      "bomb",
+      "freeze",
+    ];
+    if (this.lives < 5) types.push("heal", "heal");
+    const type = types[Math.floor(Math.random() * types.length)];
+    const word = this.uniqueBoostWord();
+    const meta: Record<BoostType, { title: string; icon: string }> = {
+      turret: { title: "Tureta", icon: "🌱" },
+      turret_ice: { title: "Mrazivá střílna", icon: "❄️" },
+      turret_knockback: { title: "Odstrkovadlo", icon: "🥊" },
+      turret_explosive: { title: "Výbušná věž", icon: "🧨" },
+      bomb: { title: "Bomba", icon: "💣" },
+      freeze: { title: "Mrazák", icon: "🧊" },
+      heal: { title: "Oprava", icon: "❤️" },
+    };
+    this.activeBoost = {
+      type,
+      title: meta[type].title,
+      icon: meta[type].icon,
+      word,
+      typed: 0,
+    };
+    this.boostLocked = false;
     this.emitHud();
   }
 
-  private hitBonus(ch: string, t: number) {
-    const expected = this.bonusWord![this.bonusTyped];
+  private uniqueBoostWord(): string {
+    const taken = new Set(
+      this.zombies
+        .filter((z) => !z.dead)
+        .map((z) => z.word[0]?.toLowerCase())
+        .filter((c): c is string => Boolean(c))
+    );
+    for (let i = 0; i < 30; i++) {
+      const w = this.gen.boostWord(taken);
+      if (!taken.has(w[0]?.toLowerCase())) return w;
+    }
+    return this.gen.boostWord(taken);
+  }
+
+  private hitBoost(ch: string, t: number) {
+    if (!this.activeBoost) return;
+    const expected = this.activeBoost.word[this.activeBoost.typed];
     if (ch === expected) {
       soundManager.playKeystroke(this.combo);
       this.registerKey(expected, true, t);
-      this.bonusTyped++;
-      if (this.bonusTyped >= this.bonusWord!.length) {
-        this.placeTower();
-        this.bonusWord = null;
-        this.bonusTyped = 0;
-        this.bonusLock = false;
+      this.activeBoost.typed++;
+      if (this.activeBoost.typed >= this.activeBoost.word.length) {
+        const type = this.activeBoost.type;
+        this.activeBoost = null;
+        this.boostLocked = false;
+        this.triggerBoost(type);
       }
     } else {
       soundManager.playTypo();
       this.registerKey(expected, false, t);
-      this.bonusTyped = 0;
-      this.bonusLock = false;
+      this.activeBoost.typed = 0;
+      this.cameras.main.shake(80, 0.002);
     }
     this.emitHud();
   }
 
-  private placeTower() {
-    // do dráhy, kde je nejvíc živých zombíků
-    const counts = Array.from({ length: LANES }, (_, i) => this.zombies.filter((z) => !z.dead && z.lane === i).length);
-    const lane = counts.indexOf(Math.max(...counts));
-    const y = LANE_TOP + lane * LANE_H + LANE_H - 6;
-    const sprite = this.add.image(HOUSE_X + 70, y, TEX.tower).setOrigin(0.5, 1).setDepth(5);
-    const towerScale = 116 / sprite.height;
-    this.tweens.add({ targets: sprite, scale: { from: 0, to: towerScale }, duration: 250, ease: "Back.out" });
-    this.towers.push({ lane, sprite, expiresAt: this.time.now + 20000, nextShotAt: this.time.now + 800 });
+  private triggerBoost(type: BoostType) {
+    switch (type) {
+      case "turret":
+        this.placeTower("basic");
+        break;
+      case "turret_ice":
+        this.placeTower("ice");
+        break;
+      case "turret_knockback":
+        this.placeTower("knockback");
+        break;
+      case "turret_explosive":
+        this.placeTower("explosive");
+        break;
+      case "bomb":
+        this.detonateBomb();
+        break;
+      case "freeze":
+        this.activateFreeze();
+        break;
+      case "heal":
+        this.healBase();
+        break;
+    }
     this.score += 50;
+    this.emitHud();
+  }
+
+  private showFloatingText(x: number, y: number, text: string, color = "#2ecc71") {
+    const t = this.add
+      .text(x, y, text, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "26px",
+        fontStyle: "bold",
+        color,
+        stroke: "#000000",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(50);
+    this.tweens.add({
+      targets: t,
+      y: y - 50,
+      alpha: 0,
+      duration: 900,
+      ease: "Cubic.out",
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  public placeTower(kind: TurretKind = "basic") {
+    // Dráha s nejvíce živými zombíky
+    const counts = Array.from({ length: LANES }, (_, i) => this.zombies.filter((z) => !z.dead && z.lane === i).length);
+    const maxZombies = Math.max(...counts);
+    const candidates = counts.map((c, i) => (c === maxZombies ? i : -1)).filter((i) => i >= 0);
+    const lane = candidates[Math.floor(Math.random() * candidates.length)];
+
+    const y = LANE_TOP + lane * LANE_H + LANE_H - 6;
+    const existingOnLane = this.towers.filter((tw) => tw.lane === lane).length;
+    const posX = HOUSE_X + 65 + existingOnLane * 50;
+
+    const sprite = this.add.image(posX, y, TEX.tower).setOrigin(0.5, 1).setDepth(5);
+    const towerScale = 116 / sprite.height;
+
+    const tintColors: Record<TurretKind, number> = {
+      basic: 0x2ecc71,
+      ice: 0x74b9ff,
+      knockback: 0xe67e22,
+      explosive: 0xff4757,
+    };
+    sprite.setTint(tintColors[kind]).setTintMode(Phaser.TintModes.MULTIPLY);
+
+    this.tweens.add({ targets: sprite, scale: { from: 0, to: towerScale }, duration: 280, ease: "Back.out" });
+
+    const lifespan = kind === "explosive" ? 25000 : kind === "basic" ? 22000 : 20000;
+    const initialDelay = kind === "explosive" ? 400 : kind === "ice" ? 500 : 600;
+
+    this.towers.push({
+      kind,
+      lane,
+      sprite,
+      expiresAt: this.time.now + lifespan,
+      nextShotAt: this.time.now + initialDelay,
+    });
+
+    const floatingConfig: Record<TurretKind, { text: string; color: string }> = {
+      basic: { text: "🌱 TURETA!", color: "#2ecc71" },
+      ice: { text: "❄️ MRAZIVÁ TURETA!", color: "#74b9ff" },
+      knockback: { text: "🥊 ODSTRKOVADLO!", color: "#e67e22" },
+      explosive: { text: "🧨 VÝBUŠNÁ VĚŽ!", color: "#ff4757" },
+    };
+    this.showFloatingText(posX, y - 85, floatingConfig[kind].text, floatingConfig[kind].color);
+    this.cameras.main.shake(120, 0.003);
+  }
+
+  private detonateBomb() {
+    // Najdi nejohroženější dráhu (zombík nejblíže domu)
+    const living = this.zombies.filter((z) => !z.dead);
+    const sortedByThreat = [...living].sort((a, b) => a.container.x - b.container.x);
+    const threat = sortedByThreat[0];
+    const lane = threat ? threat.lane : Math.floor(Math.random() * LANES);
+    const bombX = threat ? Math.min(threat.container.x, W - 140) : W / 2;
+    const bombY = LANE_TOP + lane * LANE_H + LANE_H / 2;
+
+    this.cameras.main.shake(350, 0.015);
+    this.cameras.main.flash(150, 255, 90, 40);
+
+    // Animace exploze
+    const g = this.add.graphics().setDepth(30);
+    this.tweens.addCounter({
+      from: 10,
+      to: 180,
+      duration: 380,
+      ease: "Quad.out",
+      onUpdate: (tween) => {
+        g.clear();
+        const r = tween.getValue() ?? 10;
+        const a = 1 - r / 180;
+        g.fillStyle(0xff4757, a * 0.7);
+        g.fillCircle(bombX, bombY, r);
+        g.lineStyle(5, 0xffa502, a);
+        g.strokeCircle(bombX, bombY, r * 1.05);
+      },
+      onComplete: () => g.destroy(),
+    });
+
+    this.showFloatingText(bombX, bombY - 45, "💥 BUM!", "#ff4757");
+
+    // Znič nebo těžce zraň zombíky v této dráze
+    const laneZombies = this.zombies.filter((z) => !z.dead && z.lane === lane);
+    for (const z of laneZombies) {
+      if (Math.abs(z.container.x - bombX) < 260) {
+        if (z.kind === "boss") {
+          z.hp -= 2;
+          if (z.hp <= 0) {
+            this.score += 50;
+            this.kill(z);
+          } else {
+            z.queue.splice(0, Math.min(2, z.queue.length));
+            this.flash(z);
+          }
+        } else {
+          this.score += 25;
+          this.kill(z);
+        }
+      }
+    }
+  }
+
+  private activateFreeze() {
+    this.freezeUntil = this.time.now + 6000;
+    this.cameras.main.flash(200, 100, 200, 255);
+    this.showFloatingText(W / 2, H / 2 - 30, "❄️ ZMRAZENO!", "#74b9ff");
+
+    for (const z of this.zombies) {
+      if (!z.dead) {
+        z.sprite.setTint(0x74b9ff).setTintMode(Phaser.TintModes.MULTIPLY);
+      }
+    }
+
+    this.time.delayedCall(6000, () => {
+      if (this.time.now >= this.freezeUntil) {
+        for (const z of this.zombies) {
+          if (!z.dead && z.sprite.active) {
+            // po mrazu zůstane modrá jen zpomaleným zombíkům (ledová tureta)
+            if (z.slowUntil && this.time.now < z.slowUntil) z.sprite.setTint(0x74b9ff).setTintMode(Phaser.TintModes.MULTIPLY);
+            else z.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+          }
+        }
+      }
+    });
+  }
+
+  private healBase() {
+    this.lives = Math.min(5, this.lives + 1);
+    this.livesLost = Math.max(0, this.livesLost - 1);
+    this.cameras.main.flash(150, 46, 204, 113);
+    this.showFloatingText(HOUSE_X + 50, LANE_TOP + LANE_H, "+1 ❤", "#e74c3c");
   }
 
   private updateTowers() {
     for (const tw of this.towers) {
       if (this.time.now >= tw.expiresAt) {
-        this.tweens.add({ targets: tw.sprite, alpha: 0, duration: 300, onComplete: () => tw.sprite.destroy() });
+        if (tw.sprite && tw.sprite.active) {
+          this.tweens.add({
+            targets: tw.sprite,
+            alpha: 0,
+            duration: 300,
+            onComplete: () => {
+              if (tw.sprite.active) tw.sprite.destroy();
+            },
+          });
+        }
         continue;
       }
       if (this.time.now < tw.nextShotAt) continue;
+
       const target = this.zombies
-        .filter((z) => !z.dead && z.lane === tw.lane)
+        .filter((z) => !z.dead && z.lane === tw.lane && z.container.x <= W - 20)
         .sort((a, b) => a.container.x - b.container.x)[0];
       if (!target) continue;
-      tw.nextShotAt = this.time.now + 2500;
+
+      if (tw.kind === "basic") {
+        tw.nextShotAt = this.time.now + 1600;
+      } else if (tw.kind === "ice") {
+        tw.nextShotAt = this.time.now + 2000;
+      } else if (tw.kind === "knockback") {
+        tw.nextShotAt = this.time.now + 2400;
+      } else if (tw.kind === "explosive") {
+        // Jednorázová věž: po výstřelu se okamžitě sebedestruuje
+        tw.expiresAt = 0;
+        const twSprite = tw.sprite;
+        this.tweens.add({
+          targets: twSprite,
+          scale: 0,
+          alpha: 0,
+          duration: 350,
+          ease: "Back.in",
+          onComplete: () => {
+            this.tweens.killTweensOf(twSprite);
+            if (twSprite.active) twSprite.destroy();
+          },
+        });
+      }
+
+      // Zpětný ráz věže
+      if (tw.sprite.active) {
+        this.tweens.add({ targets: tw.sprite, x: tw.sprite.x - 4, duration: 60, yoyo: true });
+      }
+
       soundManager.playTowerShot();
-      const bullet = this.add.image(tw.sprite.x + 20, tw.sprite.y - tw.sprite.displayHeight * 0.65, TEX.bullet).setDepth(20);
+
+      const bulletX = tw.sprite.x + 20;
+      const bulletY = tw.sprite.y - tw.sprite.displayHeight * 0.65;
+      const bullet = this.add.image(bulletX, bulletY, TEX.bullet).setDepth(20);
+
+      const bulletTints: Record<TurretKind, number> = {
+        basic: 0x2ecc71,
+        ice: 0x74b9ff,
+        knockback: 0xe67e22,
+        explosive: 0xff4757,
+      };
+      const bulletScales: Record<TurretKind, number> = {
+        basic: 1.0,
+        ice: 1.2,
+        knockback: 1.3,
+        explosive: 1.6,
+      };
+
+      bullet.setTint(bulletTints[tw.kind]).setTintMode(Phaser.TintModes.MULTIPLY);
+      bullet.setScale(bulletScales[tw.kind]);
+
+      const turretKind = tw.kind;
+
       this.tweens.add({
         targets: bullet,
         x: target.container.x,
-        duration: 250,
+        duration: 220,
         onComplete: () => {
           bullet.destroy();
+
+          if (turretKind === "explosive") {
+            const impactX = target.container ? target.container.x : target.sprite.x;
+            const impactY = target.container ? target.container.y : target.sprite.y;
+
+            // Animovaný explozivní kruh
+            const g = this.add.graphics().setDepth(30);
+            this.tweens.addCounter({
+              from: 10,
+              to: 140,
+              duration: 350,
+              ease: "Quad.out",
+              onUpdate: (tween) => {
+                g.clear();
+                const r = tween.getValue() ?? 10;
+                const a = 1 - r / 140;
+                g.fillStyle(0xff4757, a * 0.7);
+                g.fillCircle(impactX, impactY, r);
+                g.lineStyle(5, 0xffa502, a);
+                g.strokeCircle(impactX, impactY, r * 1.05);
+              },
+              onComplete: () => g.destroy(),
+            });
+
+            this.cameras.main.shake(200, 0.008);
+            this.showFloatingText(impactX, impactY - 60, "💥 BUM!", "#ff4757");
+
+            if (target.dead) return;
+
+            if (target.kind === "boss") {
+              const dmg = Math.min(4, target.hp);
+              for (let d = 0; d < dmg - 1; d++) {
+                if (target.queue.length > 0) target.queue.shift();
+              }
+              target.hp -= dmg;
+              if (target.hp <= 0) {
+                target.queue = [];
+                this.kill(target);
+              } else {
+                if (target.queue.length > 0) {
+                  target.word = target.queue.shift()!;
+                  target.typed = 0;
+                }
+                this.layoutLabel(target);
+                this.flash(target);
+              }
+            } else {
+              target.queue = [];
+              target.hp = 0;
+              this.score += 50;
+              if (this.locked === target) this.locked = null;
+              this.kill(target);
+            }
+            return;
+          }
+
           if (target.dead) return;
-          // střela smaže jeden znak z konce slova
+
+          if (turretKind === "knockback") {
+            const newX = Math.min(W, target.container.x + 120);
+            this.tweens.add({
+              targets: target.container,
+              x: newX,
+              duration: 200,
+              ease: "Cubic.out",
+            });
+            target.stunUntil = Math.max(target.stunUntil ?? 0, this.time.now + 400);
+            this.flash(target);
+            this.cameras.main.shake(80, 0.002);
+            this.showFloatingText(target.container.x, target.container.y - 60, "🥊 ZPĚT!", "#e67e22");
+            return;
+          }
+
+          if (turretKind === "ice") {
+            const slowDuration = 3500;
+            target.slowUntil = Math.max(target.slowUntil ?? 0, this.time.now + slowDuration);
+            target.sprite.setTint(0x74b9ff).setTintMode(Phaser.TintModes.MULTIPLY);
+
+            this.time.delayedCall(slowDuration, () => {
+              if (
+                !target.dead &&
+                target.sprite.active &&
+                this.time.now >= (target.slowUntil ?? 0) &&
+                this.time.now >= this.freezeUntil
+              ) {
+                target.sprite.clearTint().setTintMode(Phaser.TintModes.MULTIPLY);
+              }
+            });
+
+            if (target.word.length - target.typed > 1) {
+              target.word = target.word.slice(0, -1);
+              this.layoutLabel(target);
+              this.flash(target);
+              this.showFloatingText(target.container.x, target.container.y - 60, "❄️ -1", "#74b9ff");
+            } else {
+              this.score += 15;
+              this.wordDone(target);
+            }
+            return;
+          }
+
+          // Základní věž: ubourání jednoho znaku
           if (target.word.length - target.typed > 1) {
             target.word = target.word.slice(0, -1);
             this.layoutLabel(target);
             this.flash(target);
+            this.showFloatingText(target.container.x, target.container.y - 60, "-1", "#2ecc71");
           } else {
-            this.score += 5;
+            this.score += 15;
             this.wordDone(target);
           }
         },
@@ -786,9 +1222,16 @@ export class LevelScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     if (this.finished || !this.started || this.isPaused) return;
     const dt = delta / 1000;
+    const isFrozen = this.time.now < this.freezeUntil;
     for (const z of this.zombies) {
       if (z.dead) continue;
-      z.container.x -= z.speed * dt;
+      let speedMul = isFrozen ? 0.35 : 1;
+      if (z.stunUntil && this.time.now < z.stunUntil) {
+        speedMul = 0;
+      } else if (z.slowUntil && this.time.now < z.slowUntil) {
+        speedMul *= 0.5;
+      }
+      z.container.x -= z.speed * dt * speedMul;
       if (z.container.x <= HOUSE_X) this.reachedHouse(z);
     }
     this.updateTowers();
@@ -818,6 +1261,7 @@ export class LevelScene extends Phaser.Scene {
     z.dead = true;
     soundManager.playHouseBreach();
     this.tweens.killTweensOf(z.sprite);
+    this.tweens.killTweensOf(z.container);
     z.container.destroy();
     this.cameras.main.shake(200, 0.01);
     this.cameras.main.flash(150, 200, 30, 30);
@@ -907,6 +1351,8 @@ export class LevelScene extends Phaser.Scene {
       this.pauseStartAt = performance.now();
       if (this.spawnEvent) this.spawnEvent.paused = true;
       if (this.startTimer) this.startTimer.paused = true;
+      // zastaví i delayedCall (konec mrazu, zpomalení, nabídka bůstu, zen spawn)
+      this.time.paused = true;
       this.tweens.pauseAll();
       this.input_.setPaused(true);
       bridge.emitTyped("pause-state", true);
@@ -919,7 +1365,13 @@ export class LevelScene extends Phaser.Scene {
           tw.expiresAt += pauseDelta;
           tw.nextShotAt += pauseDelta;
         }
+        if (this.freezeUntil > 0) this.freezeUntil += pauseDelta;
+        for (const z of this.zombies) {
+          if (z.slowUntil) z.slowUntil += pauseDelta;
+          if (z.stunUntil) z.stunUntil += pauseDelta;
+        }
       }
+      this.time.paused = false;
       if (this.spawnEvent) this.spawnEvent.paused = false;
       if (this.startTimer) this.startTimer.paused = false;
       this.tweens.resumeAll();
@@ -944,21 +1396,32 @@ export class LevelScene extends Phaser.Scene {
     const boss = this.zombies.find((z) => z.kind === "boss" && !z.dead);
     const expectedChar = this.finished
       ? null
-      : this.bonusLock && this.bonusWord
-      ? (this.bonusWord[this.bonusTyped] ?? null)
+      : this.boostLocked && this.activeBoost
+      ? (this.activeBoost.word[this.activeBoost.typed] ?? null)
       : this.locked && !this.locked.dead
       ? (this.locked.word[this.locked.typed] ?? null)
       : (this.zombies
           .filter((z) => !z.dead)
           .sort((a, b) => a.container.x - b.container.x)[0]?.word[0] ?? null);
+    const boost: BoostState | null = this.activeBoost
+      ? {
+          type: this.activeBoost.type,
+          title: this.activeBoost.title,
+          icon: this.activeBoost.icon,
+          word: this.activeBoost.word,
+          typed: this.activeBoost.typed,
+          locked: this.boostLocked,
+        }
+      : null;
 
     const state: HudState = {
       lives: this.lives,
       score: this.score,
       combo: this.combo,
       remaining: this.cfg.count - this.spawned + this.livingZombies().length + (this.cfg.boss && !this.bossSpawned ? 1 : 0),
-      bonusWord: this.bonusWord,
-      bonusTyped: this.bonusTyped,
+      bonusWord: this.activeBoost?.word ?? null,
+      bonusTyped: this.activeBoost?.typed ?? 0,
+      boost,
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
       expectedChar,
       muted: soundManager.isMuted(),

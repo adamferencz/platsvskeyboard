@@ -11,6 +11,7 @@ export interface TypingHandlers {
   onChar: (ch: string, t: number) => void;
   onBackspace?: (t: number) => void;
   onEscape?: () => void;
+  onTab?: (t: number) => void;
 }
 
 export class TypingInput {
@@ -125,6 +126,11 @@ export class TypingInput {
     if (e.key === "Backspace") {
       e.preventDefault();
       this.handlers.onBackspace?.(performance.now());
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      const t = performance.now();
+      this.handlers.onTab?.(t);
+      this.handlers.onChar("Tab", t);
     }
   };
 

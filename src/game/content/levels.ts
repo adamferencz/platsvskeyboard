@@ -46,7 +46,7 @@ export function roundConfig(chapter: number, round: number, playerCpm = 0): Roun
     bossHp: 3 + Math.floor(chapter / 6),
     fastRatio: chapter >= 3 ? Math.min(0.35, 0.05 + difficulty * 0.02) : 0,
     armoredRatio: chapter >= 8 ? Math.min(0.25, difficulty * 0.015) : 0,
-    bonusEvery: chapter >= 3 ? 4 : 0,
+    bonusEvery: 3,
     lives: 5,
   };
 }

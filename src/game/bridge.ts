@@ -15,6 +15,7 @@ export interface BridgeEvents {
   "resume-level": () => void;
   "pause-level": () => void;
   "restart-level": () => void;
+  "toggle-boost": (force?: boolean) => void;
 }
 
 type Listener = (...args: unknown[]) => void;

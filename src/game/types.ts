@@ -30,6 +30,26 @@ export interface RunResult {
   zenMode?: boolean;
 }
 
+export type TurretKind = "basic" | "ice" | "knockback" | "explosive";
+
+export type BoostType =
+  | "turret"
+  | "turret_ice"
+  | "turret_knockback"
+  | "turret_explosive"
+  | "bomb"
+  | "freeze"
+  | "heal";
+
+export interface BoostState {
+  type: BoostType;
+  title: string;
+  icon: string;
+  word: string;
+  typed: number;
+  locked: boolean;
+}
+
 export interface HudState {
   lives: number;
   score: number;
@@ -37,7 +57,9 @@ export interface HudState {
   remaining: number;
   bonusWord: string | null;
   bonusTyped: number;
+  boost: BoostState | null;
   boss: { hp: number; maxHp: number } | null;
   expectedChar?: string | null;
   muted?: boolean;
 }
+

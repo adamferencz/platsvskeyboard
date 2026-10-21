@@ -363,10 +363,68 @@ export default function GameMount({
           </div>
         </div>
 
-        {hud?.bonusWord && (
-          <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-full border border-emerald-400/50 bg-emerald-600/95 px-5 py-2 font-mono text-xl sm:text-2xl text-white shadow-xl backdrop-blur-sm">
-            🌱 <span className="text-emerald-200">{hud.bonusWord.slice(0, hud.bonusTyped)}</span>
-            {hud.bonusWord.slice(hud.bonusTyped)}
+        {hud?.boost && (
+          <div
+            onClick={() => {
+              bridge.emitTyped("toggle-boost", true);
+              parentRef.current?.querySelector("input")?.focus();
+            }}
+            className={`absolute left-1/2 top-20 z-20 -translate-x-1/2 cursor-pointer select-none transition-all duration-150 ${
+              hud.boost.locked
+                ? "scale-105 ring-4 ring-emerald-400 border-2 border-emerald-300 shadow-2xl shadow-emerald-500/60 bg-zinc-900/95"
+                : "hover:scale-[1.02] ring-1 ring-white/20 hover:ring-emerald-400/50 shadow-lg bg-zinc-900/90"
+            } rounded-2xl px-5 py-2.5 backdrop-blur-md`}
+          >
+            {hud.boost.locked && (
+              <>
+                {/* Vizuální zaměřovač / rohy cíle */}
+                <span className="pointer-events-none absolute -top-1 -left-1 text-emerald-400 font-mono text-xs font-black">⌜</span>
+                <span className="pointer-events-none absolute -top-1 -right-1 text-emerald-400 font-mono text-xs font-black">⌝</span>
+                <span className="pointer-events-none absolute -bottom-1 -left-1 text-emerald-400 font-mono text-xs font-black">⌞</span>
+                <span className="pointer-events-none absolute -bottom-1 -right-1 text-emerald-400 font-mono text-xs font-black">⌟</span>
+                {/* Odznak zaměřovače v rohu */}
+                <div className="absolute -top-2.5 -right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-400 text-zinc-950 shadow-md shadow-emerald-500/50">
+                  <svg className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "6s" }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <line x1="12" y1="1" x2="12" y2="5" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="1" y1="12" x2="5" y2="12" />
+                    <line x1="19" y1="12" x2="23" y2="12" />
+                  </svg>
+                </div>
+              </>
+            )}
+            <div className="flex items-center gap-3">
+              <span className="text-2xl animate-pulse">{hud.boost.icon}</span>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-300">
+                  <span>{hud.boost.title}</span>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] flex items-center gap-1 ${
+                      hud.boost.locked
+                        ? "bg-emerald-500 text-black font-bold tracking-wide"
+                        : "bg-white/10 text-zinc-300"
+                    }`}
+                  >
+                    {hud.boost.locked ? (
+                      <>
+                        <span>🎯 ZAMČENO · PIŠ SLOVO</span>
+                      </>
+                    ) : (
+                      "MEZERNÍK / TAB = ZAMĚŘIT"
+                    )}
+                  </span>
+                </div>
+                <div className="font-mono text-2xl font-bold tracking-wider text-white">
+                  <span className="text-emerald-400 underline decoration-2 underline-offset-4">
+                    {hud.boost.word.slice(0, hud.boost.typed)}
+                  </span>
+                  <span className="text-zinc-100 opacity-90">
+                    {hud.boost.word.slice(hud.boost.typed)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
