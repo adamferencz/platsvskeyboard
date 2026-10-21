@@ -6,12 +6,14 @@ import { bridge } from "./bridge";
 import { chapterById } from "./content/curriculum";
 import { loadWords, type KeyStat } from "./content/words";
 import type { HudState, RunResult } from "./types";
+import { FingeringDiagram } from "@/components/FingeringDiagram";
 
 interface Props {
   chapter: number;
   round: number;
   keyStats: Record<string, KeyStat>;
   playerCpm: number;
+  layout?: "qwertz" | "qwerty";
   onFinished: (result: RunResult) => void;
   onExit: () => void;
 }
@@ -20,7 +22,7 @@ interface Props {
  * Obal Phaseru pro React: vytvoří hru v useEffect, zničí ji při odmountování.
  * HUD kreslí React nad canvasem podle událostí z mostu (max. 5× za sekundu).
  */
-export default function GameMount({ chapter, round, keyStats, playerCpm, onFinished, onExit }: Props) {
+export default function GameMount({ chapter, round, keyStats, playerCpm, layout, onFinished, onExit }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
@@ -66,48 +68,55 @@ export default function GameMount({ chapter, round, keyStats, playerCpm, onFinis
   const ch = chapterById(chapter);
 
   return (
-    <div className="relative mx-auto w-full max-w-[1280px] select-none">
-      <div ref={parentRef} className="aspect-video w-full overflow-hidden rounded-xl bg-[#1e2a24] shadow-2xl" />
+    <div className="mx-auto w-full max-w-[1280px] select-none">
+      <div className="relative">
+        <div ref={parentRef} className="aspect-video w-full overflow-hidden rounded-xl bg-[#1e2a24] shadow-2xl" />
 
-      {/* HUD */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 text-white">
-        <div className="space-y-1 rounded-lg bg-black/55 px-3 py-2 backdrop-blur-sm">
-          <div className="text-sm text-zinc-200">
-            Kapitola {chapter} · {ch?.name} · kolo {round}
+        {/* HUD */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 text-white">
+          <div className="space-y-1 rounded-lg bg-black/55 px-3 py-2 backdrop-blur-sm">
+            <div className="text-sm text-zinc-200">
+              Kapitola {chapter} · {ch?.name} · kolo {round}
+            </div>
+            <div className="text-2xl text-red-500" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
+              {"❤".repeat(hud?.lives ?? 0)}
+              <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
+            </div>
           </div>
-          <div className="text-2xl text-red-500" aria-label={`Životy: ${hud?.lives ?? "-"}`}>
-            {"❤".repeat(hud?.lives ?? 0)}
-            <span className="opacity-25">{"❤".repeat(Math.max(0, 5 - (hud?.lives ?? 0)))}</span>
+          <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
+            <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
+            <div className="text-sm text-zinc-200">
+              zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
+            </div>
           </div>
         </div>
-        <div className="rounded-lg bg-black/55 px-3 py-2 text-right backdrop-blur-sm">
-          <div className="text-3xl font-bold tabular-nums">{hud?.score ?? 0}</div>
-          <div className="text-sm text-zinc-200">
-            zbývá {hud?.remaining ?? "-"} · kombo {hud?.combo ?? 0}
+
+        {hud?.bonusWord && (
+          <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-emerald-600/90 px-5 py-2 font-mono text-2xl text-white shadow-lg">
+            🌱 <span className="text-emerald-200">{hud.bonusWord.slice(0, hud.bonusTyped)}</span>
+            {hud.bonusWord.slice(hud.bonusTyped)}
           </div>
-        </div>
+        )}
+
+        {hud?.boss && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
+            <div className="w-1/2 rounded-full bg-black/50 p-1">
+              <div className="h-4 rounded-full bg-purple-500 transition-all" style={{ width: `${(hud.boss.hp / hud.boss.maxHp) * 100}%` }} />
+            </div>
+          </div>
+        )}
+
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-xl text-white">
+            Načítám zombíky…
+          </div>
+        )}
       </div>
 
-      {hud?.bonusWord && (
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-full bg-emerald-600/90 px-5 py-2 font-mono text-2xl text-white shadow-lg">
-          🌱 <span className="text-emerald-200">{hud.bonusWord.slice(0, hud.bonusTyped)}</span>
-          {hud.bonusWord.slice(hud.bonusTyped)}
-        </div>
-      )}
-
-      {hud?.boss && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
-          <div className="w-1/2 rounded-full bg-black/50 p-1">
-            <div className="h-4 rounded-full bg-purple-500 transition-all" style={{ width: `${(hud.boss.hp / hud.boss.maxHp) * 100}%` }} />
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-xl text-white">
-          Načítám zombíky…
-        </div>
-      )}
+      {/* Vizuální nápověda prstokladu pod herním plátnem */}
+      <div className="mt-3">
+        <FingeringDiagram expectedChar={hud?.expectedChar} initialLayout={layout} />
+      </div>
     </div>
   );
 }
