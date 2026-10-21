@@ -34,13 +34,13 @@ export function roundConfig(chapter: number, round: number, playerCpm = 0): Roun
 
   // silný student dostane rychlejší zombíky, slabý pomalejší
   const cpmFactor = playerCpm > 0 ? Math.min(1.6, Math.max(0.7, playerCpm / 150)) : 1;
-  const crossSec = Math.max(4.5, (14 - difficulty * 0.35) / cpmFactor);
+  const crossSec = Math.max(4.0, (11.0 - difficulty * 0.30) / cpmFactor);
 
   return {
     chapter,
     round,
     count: Math.round(8 + difficulty * 1.2),
-    spawnMs: Math.max(1100, 3200 - difficulty * 110),
+    spawnMs: Math.max(900, 2200 - difficulty * 100),
     crossSec,
     boss,
     bossHp: 3 + Math.floor(chapter / 6),
