@@ -103,6 +103,9 @@ describe("SoundManager", () => {
       sm.playHouseBreach();
       sm.playVictory();
       sm.playDefeat();
+      sm.playComboMilestone(5);
+      sm.playComboMilestone(10);
+      sm.playComboMilestone(25);
     });
   });
 
@@ -193,6 +196,9 @@ describe("SoundManager", () => {
       sm.playHouseBreach();
       sm.playVictory();
       sm.playDefeat();
+      sm.playComboMilestone(5);
+      sm.playComboMilestone(10);
+      sm.playComboMilestone(25);
     });
 
     assert(nodesCreated > 0, "Nodes should have been created and started for procedural sounds");

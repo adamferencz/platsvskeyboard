@@ -505,6 +505,60 @@ export class SoundManager {
       }, (n.start + n.dur + 0.1) * 1000);
     }
   }
+
+  /**
+   * 8. Milník komba (playComboMilestone)
+   * Rychlé třpytivé vzestupné arpeggio (sine/triangle) oslavující sérii správně napsaných slov (5, 10, 20...).
+   */
+  playComboMilestone(milestone: number = 5): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.masterGain) return;
+
+    const baseTime = ctx.currentTime;
+    const notes =
+      milestone >= 20
+        ? [
+            { freq: 783.99, start: 0.0, dur: 0.12 }, // G5
+            { freq: 1046.5, start: 0.06, dur: 0.12 }, // C6
+            { freq: 1318.5, start: 0.12, dur: 0.14 }, // E6
+            { freq: 1567.98, start: 0.18, dur: 0.28 }, // G6
+          ]
+        : milestone >= 10
+        ? [
+            { freq: 659.25, start: 0.0, dur: 0.11 }, // E5
+            { freq: 880.0, start: 0.07, dur: 0.12 }, // A5
+            { freq: 1108.73, start: 0.14, dur: 0.24 }, // C#6
+          ]
+        : [
+            { freq: 587.33, start: 0.0, dur: 0.1 }, // D5
+            { freq: 880.0, start: 0.07, dur: 0.2 }, // A5
+          ];
+
+    for (const n of notes) {
+      const t = baseTime + n.start;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(n.freq, t);
+
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.18, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + n.dur);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(t);
+      osc.stop(t + n.dur);
+
+      setTimeout(() => {
+        osc.disconnect();
+        gain.disconnect();
+      }, (n.start + n.dur + 0.05) * 1000);
+    }
+  }
 }
 
 export const soundManager = new SoundManager();
