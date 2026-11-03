@@ -673,6 +673,7 @@ export class LevelScene extends Phaser.Scene {
       z.typed++;
       this.layoutLabel(z);
       this.tweens.add({ targets: z.sprite, scaleX: 0.9, scaleY: 1.08, duration: 60, yoyo: true });
+      this.spawnHitSparks(z.container.x, z.container.y - z.sprite.displayHeight * 0.7);
       if (z.typed >= z.word.length) {
         this.wordDone(z);
       } else {
@@ -690,6 +691,101 @@ export class LevelScene extends Phaser.Scene {
     }
   }
 
+  private spawnHitSparks(x: number, y: number) {
+    const count = 3;
+    for (let i = 0; i < count; i++) {
+      const g = this.add.graphics();
+      g.fillStyle(0x2ecc71, 0.95);
+      g.fillCircle(0, 0, 3);
+      g.setPosition(x + (Math.random() - 0.5) * 20, y + (Math.random() - 0.5) * 15);
+      g.setDepth(150);
+      const targetX = g.x + (Math.random() - 0.5) * 35;
+      const targetY = g.y - 12 - Math.random() * 18;
+      this.tweens.add({
+        targets: g,
+        x: targetX,
+        y: targetY,
+        alpha: 0,
+        scale: 0.2,
+        duration: 180,
+        ease: "Quad.out",
+        onComplete: () => g.destroy(),
+      });
+    }
+  }
+
+  private spawnFloatingScore(x: number, y: number, text: string, color = "#f1c40f") {
+    const t = this.add
+      .text(x, y, text, {
+        fontFamily: "system-ui, sans-serif",
+        fontSize: "22px",
+        fontStyle: "bold",
+        color,
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setDepth(220);
+
+    this.tweens.add({
+      targets: t,
+      y: y - 45,
+      scale: { from: 0.8, to: 1.15 },
+      alpha: { from: 1, to: 0 },
+      duration: 650,
+      ease: "Cubic.out",
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  private spawnZombieDeathParticles(x: number, y: number, kind: ZombieKind) {
+    const colors =
+      kind === "boss"
+        ? [0x9b59b6, 0x8e44ad, 0xf1c40f, 0xe74c3c]
+        : kind === "fast"
+        ? [0xf1c40f, 0xe67e22, 0xff7675]
+        : kind === "armored"
+        ? [0x7f8c8d, 0x95a5a6, 0x2ecc71]
+        : [0x2ecc71, 0x27ae60, 0x55efc4];
+
+    const count = kind === "boss" ? 24 : 10;
+    for (let i = 0; i < count; i++) {
+      const g = this.add.graphics();
+      const color = colors[i % colors.length];
+      const size = kind === "boss" ? 5 + Math.random() * 5 : 3 + Math.random() * 4;
+      g.fillStyle(color, 1);
+      if (i % 2 === 0) {
+        g.fillRect(-size / 2, -size / 2, size, size);
+      } else {
+        g.fillCircle(0, 0, size / 2);
+      }
+      g.setPosition(x, y);
+      g.setDepth(180);
+
+      const angle = Math.random() * Math.PI * 2;
+      const speed = kind === "boss" ? 70 + Math.random() * 110 : 40 + Math.random() * 70;
+      const targetX = x + Math.cos(angle) * speed;
+      const targetY = y + Math.sin(angle) * speed + 25; // gravitace
+
+      this.tweens.add({
+        targets: g,
+        x: targetX,
+        y: targetY,
+        angle: (Math.random() - 0.5) * 360,
+        alpha: 0,
+        scale: { from: 1, to: 0.2 },
+        duration: kind === "boss" ? 650 : 450,
+        ease: "Quad.out",
+        onComplete: () => g.destroy(),
+      });
+    }
+
+    if (kind === "boss") {
+      this.cameras.main.shake(400, 0.008);
+      this.spawnFloatingScore(x, y - 60, "👑 BOSS ZNIČEN! 👑", "#ffd32a");
+    }
+  }
+
   private flashZombieError(z: Zombie) {
     if (!z || z.dead || !z.container || !z.container.active) return;
     z.restText.setColor("#ff4757");
@@ -704,7 +800,14 @@ export class LevelScene extends Phaser.Scene {
     const base = 10 * z.word.length;
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
-    this.score += base + Math.min(this.combo, 10) * 5;
+    const addedScore = base + Math.min(this.combo, 10) * 5;
+    this.score += addedScore;
+    this.spawnFloatingScore(
+      z.container.x,
+      z.container.y - z.sprite.displayHeight - 15,
+      `+${addedScore}`,
+      this.combo >= 10 ? "#ffd32a" : "#2ecc71"
+    );
     if (this.combo > 0 && this.combo % 5 === 0) {
       soundManager.playComboMilestone(this.combo);
       this.showComboBanner(this.combo, z.container.x, z.container.y - 45);
@@ -771,6 +874,7 @@ export class LevelScene extends Phaser.Scene {
     }
     this.kills++;
     soundManager.playZombieDefeat();
+    this.spawnZombieDeathParticles(z.container.x, z.container.y - z.sprite.displayHeight * 0.5, z.kind);
     this.updateZombieHighlight(z, false);
     this.tweens.killTweensOf(z.sprite);
     this.tweens.killTweensOf(z.container);
