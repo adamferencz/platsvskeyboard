@@ -1473,6 +1473,15 @@ export class LevelScene extends Phaser.Scene {
         }
       : null;
 
+    let liveCpm = 0;
+    if (this.started && !this.finished && this.startAt > 0) {
+      const activePauseMs = this.isPaused && this.pauseStartAt > 0 ? performance.now() - this.pauseStartAt : 0;
+      const elapsedMs = performance.now() - this.startAt - this.totalPauseDurationMs - activePauseMs;
+      if (elapsedMs >= 1500 && this.correct > 0) {
+        liveCpm = Math.round((this.correct / elapsedMs) * 60000);
+      }
+    }
+
     const state: HudState = {
       lives: this.lives,
       score: this.score,
@@ -1484,6 +1493,7 @@ export class LevelScene extends Phaser.Scene {
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
       expectedChar,
       muted: soundManager.isMuted(),
+      liveCpm,
     };
     bridge.emitTyped("hud", state);
   }
