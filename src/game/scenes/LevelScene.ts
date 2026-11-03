@@ -690,6 +690,10 @@ export class LevelScene extends Phaser.Scene {
     this.combo++;
     this.maxCombo = Math.max(this.maxCombo, this.combo);
     this.score += base + Math.min(this.combo, 10) * 5;
+    if (this.combo > 0 && this.combo % 5 === 0) {
+      soundManager.playComboMilestone(this.combo);
+      this.showComboBanner(this.combo, z.container.x, z.container.y - 45);
+    }
     z.hp--;
     if (z.queue.length > 0) {
       // boss / obrněný: další slovo
@@ -712,6 +716,37 @@ export class LevelScene extends Phaser.Scene {
       this.killsSinceBoost = 0;
       this.offerBoost();
     }
+  }
+
+  private showComboBanner(combo: number, x: number, y: number) {
+    const text =
+      combo >= 20
+        ? `⚡ ULTRA COMBO x${combo}! ⚡`
+        : combo >= 10
+        ? `🔥 COMBO x${combo}! 🔥`
+        : `✨ KOMBO x${combo}!`;
+
+    const color = combo >= 20 ? "#ffd32a" : combo >= 10 ? "#ff9f43" : "#2ecc71";
+    const banner = this.add
+      .text(x, y, text, {
+        fontFamily: "Arial, sans-serif",
+        fontSize: "24px",
+        color,
+        stroke: "#000000",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(210);
+
+    this.tweens.add({
+      targets: banner,
+      y: y - 50,
+      alpha: 0,
+      scale: 1.25,
+      duration: 1100,
+      ease: "Cubic.out",
+      onComplete: () => banner.destroy(),
+    });
   }
 
   private kill(z: Zombie) {
