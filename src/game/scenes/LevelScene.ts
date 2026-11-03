@@ -681,8 +681,23 @@ export class LevelScene extends Phaser.Scene {
     } else {
       soundManager.playTypo();
       this.registerKey(expected, false, t);
+      // Issue #19: po chybě ve slově se rozepsané slovo resetuje na začátek
+      z.typed = 0;
+      this.layoutLabel(z);
+      this.flashZombieError(z);
       this.tweens.add({ targets: z.container, x: z.container.x + 6, duration: 40, yoyo: true, repeat: 2 });
+      this.emitHud();
     }
+  }
+
+  private flashZombieError(z: Zombie) {
+    if (!z || z.dead || !z.container || !z.container.active) return;
+    z.restText.setColor("#ff4757");
+    this.time.delayedCall(180, () => {
+      if (z && !z.dead && z.restText.active) {
+        z.restText.setColor("#ffffff");
+      }
+    });
   }
 
   private wordDone(z: Zombie) {
