@@ -203,4 +203,58 @@ describe("SoundManager", () => {
 
     assert(nodesCreated > 0, "Nodes should have been created and started for procedural sounds");
   });
+
+  describe("Volume control and persistence", () => {
+    test("initializes with default volume 0.65 when no storage value exists", () => {
+      const sm = new SoundManager();
+      assert.strictEqual(sm.getVolume(), 0.65);
+    });
+
+    test("loads volume preference from localStorage if set", () => {
+      globalThis.localStorage.setItem("pvk_sfx_volume", "0.3");
+      const sm = new SoundManager();
+      assert.strictEqual(sm.getVolume(), 0.3);
+    });
+
+    test("setVolume clamps value between 0.0 and 1.0 and persists to localStorage", () => {
+      const sm = new SoundManager();
+      sm.setVolume(0.8);
+      assert.strictEqual(sm.getVolume(), 0.8);
+      assert.strictEqual(globalThis.localStorage.getItem("pvk_sfx_volume"), "0.8");
+
+      // Clamping over 1.0
+      sm.setVolume(1.5);
+      assert.strictEqual(sm.getVolume(), 1.0);
+
+      // Clamping below 0.0
+      sm.setVolume(-0.5);
+      assert.strictEqual(sm.getVolume(), 0.0);
+    });
+
+    test("setVolume(0) mutes sound and raising volume unmutes", () => {
+      const sm = new SoundManager();
+      assert.strictEqual(sm.isMuted(), false);
+
+      sm.setVolume(0);
+      assert.strictEqual(sm.isMuted(), true);
+
+      sm.setVolume(0.5);
+      assert.strictEqual(sm.isMuted(), false);
+      assert.strictEqual(sm.getVolume(), 0.5);
+    });
+
+    test("notifies volume listeners on volume change and allows unregistering", () => {
+      const sm = new SoundManager();
+      const volumes: number[] = [];
+      const unsub = sm.addVolumeListener((v) => volumes.push(v));
+
+      sm.setVolume(0.4);
+      sm.setVolume(0.7);
+      assert.deepStrictEqual(volumes, [0.4, 0.7]);
+
+      unsub();
+      sm.setVolume(0.9);
+      assert.deepStrictEqual(volumes, [0.4, 0.7]);
+    });
+  });
 });

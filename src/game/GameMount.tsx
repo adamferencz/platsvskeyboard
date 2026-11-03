@@ -43,6 +43,7 @@ export default function GameMount({
   const gameRef = useRef<Phaser.Game | null>(null);
   const [hud, setHud] = useState<HudState | null>(null);
   const [muted, setMuted] = useState(false);
+  const [volume, setVolume] = useState(soundManager.getVolume());
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -55,9 +56,12 @@ export default function GameMount({
 
   useEffect(() => {
     setMuted(soundManager.isMuted());
+    setVolume(soundManager.getVolume());
     const offMute = soundManager.addListener(setMuted);
+    const offVolume = soundManager.addVolumeListener(setVolume);
     return () => {
       offMute();
+      offVolume();
     };
   }, []);
 
@@ -495,6 +499,29 @@ export default function GameMount({
                     M
                   </kbd>
                 </button>
+
+                <div className="rounded-xl bg-zinc-800/70 border border-white/5 p-3 text-left">
+                  <div className="flex items-center justify-between text-xs text-zinc-300 mb-1.5 font-medium">
+                    <span className="flex items-center gap-1.5">
+                      <span>{muted || volume === 0 ? "🔇" : "🔊"}</span>
+                      <span>Hlasitost efektů</span>
+                    </span>
+                    <span>{muted ? "Ztlumeno" : `${Math.round(volume * 100)} %`}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={muted ? 0 : volume}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      soundManager.setVolume(v);
+                      if (muted && v > 0) soundManager.setMuted(false);
+                    }}
+                    className="w-full accent-emerald-500 cursor-pointer h-1.5 bg-zinc-700 rounded-lg"
+                  />
+                </div>
               </div>
             </div>
           </div>

@@ -15,17 +15,21 @@
  */
 
 type MuteListener = (muted: boolean) => void;
+export type VolumeListener = (volume: number) => void;
 
 export class SoundManager {
   private ctx: AudioContext | null = null;
   private noiseBuffer: AudioBuffer | null = null;
   private muted: boolean = false;
+  private volume: number = 0.65;
   private masterGain: GainNode | null = null;
   private listeners = new Set<MuteListener>();
+  private volumeListeners = new Set<VolumeListener>();
   private unlocked = false;
 
   constructor() {
     this.muted = this.loadMuted();
+    this.volume = this.loadVolume();
     if (typeof window !== "undefined") {
       this.setupAutoUnlock();
     }
@@ -46,7 +50,7 @@ export class SoundManager {
     this.muted = muted;
     this.saveMuted(muted);
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(muted ? 0 : 0.65, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(muted ? 0 : this.volume, this.ctx.currentTime);
     }
     this.notifyListeners();
   }
@@ -60,11 +64,48 @@ export class SoundManager {
   }
 
   /**
+   * Získá aktuálně nastavenou hlasitost (0.0 až 1.0).
+   */
+  getVolume(): number {
+    return this.volume;
+  }
+
+  /**
+   * Nastaví hlasitost efektů (0.0 až 1.0) a uloží ji do localStorage.
+   */
+  setVolume(v: number): void {
+    const clamped = Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.65));
+    this.volume = clamped;
+    this.saveVolume(clamped);
+
+    if (clamped === 0) {
+      if (!this.muted) {
+        this.setMuted(true);
+      }
+    } else {
+      if (this.muted) {
+        this.setMuted(false);
+      } else if (this.masterGain && this.ctx) {
+        this.masterGain.gain.setValueAtTime(this.volume, this.ctx.currentTime);
+      }
+    }
+    this.notifyVolumeListeners();
+  }
+
+  /**
    * Registrace posluchače změn ztlumení (vrací odhlašovací funkci).
    */
   addListener(fn: MuteListener): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);
+  }
+
+  /**
+   * Registrace posluchače změn hlasitosti (vrací odhlašovací funkci).
+   */
+  addVolumeListener(fn: VolumeListener): () => void {
+    this.volumeListeners.add(fn);
+    return () => this.volumeListeners.delete(fn);
   }
 
   private notifyListeners(): void {
@@ -73,6 +114,16 @@ export class SoundManager {
         fn(this.muted);
       } catch (err) {
         console.error("Chyba v SoundManager listeneru:", err);
+      }
+    }
+  }
+
+  private notifyVolumeListeners(): void {
+    for (const fn of this.volumeListeners) {
+      try {
+        fn(this.volume);
+      } catch (err) {
+        console.error("Chyba v SoundManager volume listeneru:", err);
       }
     }
   }
@@ -90,6 +141,27 @@ export class SoundManager {
     if (typeof localStorage === "undefined") return;
     try {
       localStorage.setItem("pvk_sfx_muted", String(muted));
+    } catch {
+      // ignore security/quota errors
+    }
+  }
+
+  private loadVolume(): number {
+    if (typeof localStorage === "undefined") return 0.65;
+    try {
+      const v = localStorage.getItem("pvk_sfx_volume");
+      if (v === null) return 0.65;
+      const num = parseFloat(v);
+      return isNaN(num) ? 0.65 : Math.max(0, Math.min(1, num));
+    } catch {
+      return 0.65;
+    }
+  }
+
+  private saveVolume(volume: number): void {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem("pvk_sfx_volume", String(volume));
     } catch {
       // ignore security/quota errors
     }
@@ -127,7 +199,7 @@ export class SoundManager {
       try {
         this.ctx = new AudioCtx();
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.setValueAtTime(this.muted ? 0 : 0.65, this.ctx.currentTime);
+        this.masterGain.gain.setValueAtTime(this.muted ? 0 : this.volume, this.ctx.currentTime);
         this.masterGain.connect(this.ctx.destination);
       } catch {
         return null;
