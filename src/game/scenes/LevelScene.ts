@@ -1473,6 +1473,17 @@ export class LevelScene extends Phaser.Scene {
         }
       : null;
 
+    const durationMs = this.started
+      ? Math.max(1, Math.round(performance.now() - this.startAt - this.totalPauseDurationMs))
+      : 0;
+    const totalKeystrokes = this.correct + this.errors;
+    const liveAccuracy = totalKeystrokes > 0
+      ? accuracy({ correct: this.correct, errors: this.errors, durationMs })
+      : 100;
+    const liveCpm = durationMs > 1500 && totalKeystrokes > 0
+      ? netCpm({ correct: this.correct, errors: this.errors, durationMs })
+      : 0;
+
     const state: HudState = {
       lives: this.lives,
       score: this.score,
@@ -1484,6 +1495,8 @@ export class LevelScene extends Phaser.Scene {
       boss: boss ? { hp: boss.hp, maxHp: boss.maxHp } : null,
       expectedChar,
       muted: soundManager.isMuted(),
+      liveCpm,
+      liveAccuracy,
     };
     bridge.emitTyped("hud", state);
   }
