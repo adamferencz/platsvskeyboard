@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth/AuthContext";
 type Mode = "login" | "register" | "reset";
 
 export default function LoginPage() {
-  const { access, signInGoogle, signInEmail, registerEmail, resetPassword } = useAuth();
+  const { access, signInGoogle, signInEmail, registerEmail, resetPassword, signInGuest } = useAuth();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
@@ -35,14 +35,42 @@ export default function LoginPage() {
   return (
     <div className="mx-auto mt-10 max-w-md rounded-2xl border border-white/10 bg-zinc-900 p-6">
       <h1 className="mb-1 text-2xl font-bold">Přihlášení</h1>
-      <p className="mb-6 text-sm text-zinc-400">
-        Studenti: školní e-mail <b>@{process.env.NEXT_PUBLIC_SCHOOL_DOMAIN ?? "ghb.cz"}</b> a heslo (přihlášení Microsoft účtem přijde brzy).
+      <p className="mb-5 text-sm text-zinc-400">
+        Hra na psaní všemi deseti pro Gymnázium Havlíčkův Brod.
       </p>
+
+      {/* Dev / Guest Mode Bypass (Issue #38) */}
+      <div className="mb-5 rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-3.5 text-center">
+        <button
+          type="button"
+          onClick={() => {
+            signInGuest();
+            router.replace("/");
+          }}
+          disabled={busy}
+          className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 font-semibold text-white shadow hover:bg-emerald-500 active:scale-[0.99] transition-all cursor-pointer"
+        >
+          <span>🎮</span>
+          <span>Hrát jako host / Vývojář</span>
+        </button>
+        <p className="mt-2 text-xs text-emerald-300/80">
+          Umožní hrát offline a bez školního e-mailu. Postup se ukládá lokálně.
+        </p>
+      </div>
+
+      <div className="relative my-5 flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-white/10" />
+        </div>
+        <span className="relative bg-zinc-900 px-3 text-xs uppercase tracking-wider text-zinc-500">
+          nebo školním účtem GHB
+        </span>
+      </div>
 
       <button
         onClick={() => void run(signInGoogle)}
         disabled={busy}
-        className="mb-4 w-full rounded-lg border border-white/15 px-4 py-2.5 font-medium hover:bg-white/10 disabled:opacity-50"
+        className="mb-4 w-full rounded-lg border border-white/15 px-4 py-2.5 font-medium hover:bg-white/10 disabled:opacity-50 cursor-pointer"
       >
         Pokračovat přes Google (učitelé)
       </button>

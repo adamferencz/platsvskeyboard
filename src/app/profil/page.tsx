@@ -63,6 +63,10 @@ function Profile() {
     setBusy(true);
     setMsg(null);
     try {
+      if (user?.uid === "guest") {
+        setMsg("Uloženo lokálně (režim hosta).");
+        return;
+      }
       await updateUserProfile(user!.uid, {
         displayName: name.trim() || profile!.displayName,
         track: (track || null) as Track | null,
@@ -79,6 +83,10 @@ function Profile() {
   }
 
   async function claim() {
+    if (user?.uid === "guest") {
+      setMsg("V režimu hosta nelze požádat o oficiální známku.");
+      return;
+    }
     setBusy(true);
     setMsg(null);
     try {
