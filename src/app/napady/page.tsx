@@ -255,7 +255,10 @@ function Board({
                 e.preventDefault();
                 setOver(status);
               }}
-              onDragLeave={() => setOver((o) => (o === status ? null : o))}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                setOver((o) => (o === status ? null : o));
+              }}
               onDrop={(e) => {
                 if (!staff) return;
                 e.preventDefault();

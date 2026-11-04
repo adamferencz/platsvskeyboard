@@ -158,6 +158,8 @@ export interface SuggestionDoc {
   voters: string[];
   votes: number;
   commentCount: number;
+  /** poslední přidaný / smazaný komentář — kotva pro kontrolu čítače v pravidlech */
+  lastCommentId?: string;
   /** kdo na tom dělá (volný text, např. jméno studenta ze semináře) */
   assignee: string | null;
   /** odkaz na PR / issue na GitHubu */

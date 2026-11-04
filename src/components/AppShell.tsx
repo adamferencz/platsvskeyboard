@@ -12,6 +12,9 @@ const NAV = [
   { href: "/profil", label: "Profil" },
 ];
 
+const isActive = (path: string, href: string) =>
+  href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`);
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { access, profile, role, signOut } = useAuth();
   const path = usePathname();
@@ -31,13 +34,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${(n.href === "/" ? path === "/" : path.startsWith(n.href)) ? "bg-white/10 font-semibold" : ""}`}
+                  className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${isActive(path, n.href) ? "bg-white/10 font-semibold" : ""}`}
                 >
                   {n.label}
                 </Link>
               ))}
               {isTeacher && (
-                <Link href="/ucitel" className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${path === "/ucitel" ? "bg-white/10 font-semibold" : ""}`}>
+                <Link href="/ucitel" className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${isActive(path, "/ucitel") ? "bg-white/10 font-semibold" : ""}`}>
                   Učitel
                 </Link>
               )}

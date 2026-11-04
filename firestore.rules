@@ -205,6 +205,14 @@ service cloud.firestore {
         && d.category in ['napad', 'chyba', 'hra', 'obsah', 'vzhled'];
     }
 
+    function suggestionCounter() {
+      return /databases/$(database)/documents/counters/suggestions;
+    }
+
+    function commentPath(sid, cid) {
+      return /databases/$(database)/documents/suggestions/$(sid)/comments/$(cid);
+    }
+
     function changed() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -232,14 +240,26 @@ service cloud.firestore {
         && request.resource.data.voters.size() == 0 && request.resource.data.votes == 0
         && request.resource.data.commentCount == 0
         && request.resource.data.assignee == null && request.resource.data.link == null
+        && (request.resource.data.classId == null
+            || (request.resource.data.classId is string && request.resource.data.classId.size() <= 10))
         && request.resource.data.createdAt == request.time
-        && request.resource.data.number == getAfter(/databases/$(database)/documents/counters/suggestions).data.lastNumber;
+        && request.resource.data.updatedAt == request.time
+        // číslo = čítač po transakci a čítač se v ní posunul právě o 1 (žádné dvojí #N)
+        && request.resource.data.number == getAfter(suggestionCounter()).data.lastNumber
+        && ((!exists(suggestionCounter()) && request.resource.data.number == 1)
+            || (exists(suggestionCounter())
+                && get(suggestionCounter()).data.lastNumber == request.resource.data.number - 1));
       allow update: if isAllowed() && (
         voteValid()
-        // komentář přidán / smazán (batch spolu s dokumentem v podkolekci)
-        || (changed().hasOnly(['commentCount'])
-            && (request.resource.data.commentCount == resource.data.commentCount + 1
-                || request.resource.data.commentCount == resource.data.commentCount - 1))
+        // komentář přidán / smazán: batch spolu s dokumentem v podkolekci, lastCommentId ukazuje na něj
+        || (changed().hasOnly(['commentCount', 'lastCommentId'])
+            && request.resource.data.lastCommentId is string
+            && ((request.resource.data.commentCount == resource.data.commentCount + 1
+                  && !exists(commentPath(id, request.resource.data.lastCommentId))
+                  && existsAfter(commentPath(id, request.resource.data.lastCommentId)))
+              || (request.resource.data.commentCount == resource.data.commentCount - 1
+                  && exists(commentPath(id, request.resource.data.lastCommentId))
+                  && !existsAfter(commentPath(id, request.resource.data.lastCommentId)))))
         // autor upraví text, dokud je návrh nový
         || (isOwner(resource.data.uid) && resource.data.status == 'new'
             && changed().hasOnly(['title', 'body', 'category', 'updatedAt'])

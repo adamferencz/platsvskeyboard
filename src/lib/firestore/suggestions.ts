@@ -72,7 +72,7 @@ export async function createSuggestion(uid: string, profile: UserDoc, data: NewS
     tx.set(ref, {
       number: next,
       uid,
-      authorName: profile.displayName,
+      authorName: profile.displayName.slice(0, 80),
       classId: computeClassId(profile.gradYear, profile.track, schoolYearKey()),
       title: data.title.trim(),
       body: data.body.trim(),
@@ -90,11 +90,17 @@ export async function createSuggestion(uid: string, profile: UserDoc, data: NewS
   return ref.id;
 }
 
+/** Transakce čte čerstvý stav, takže dvojklik ani druhá záložka hlas nezdvojí. */
 export async function toggleVote(s: Suggestion, uid: string): Promise<void> {
-  const voted = s.voters.includes(uid);
-  await updateDoc(doc(db, COL, s.id), {
-    voters: voted ? arrayRemove(uid) : arrayUnion(uid),
-    votes: increment(voted ? -1 : 1),
+  const ref = doc(db, COL, s.id);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return;
+    const voted = ((snap.data().voters as string[] | undefined) ?? []).includes(uid);
+    tx.update(ref, {
+      voters: voted ? arrayRemove(uid) : arrayUnion(uid),
+      votes: increment(voted ? -1 : 1),
+    });
   });
 }
 
@@ -129,21 +135,23 @@ export async function deleteSuggestion(id: string): Promise<void> {
 }
 
 export async function addComment(id: string, author: { uid: string; name: string; staff: boolean }, body: string): Promise<void> {
+  const ref = doc(collection(db, COL, id, "comments"));
   const batch = writeBatch(db);
-  batch.set(doc(collection(db, COL, id, "comments")), {
+  batch.set(ref, {
     uid: author.uid,
-    authorName: author.name,
+    authorName: author.name.slice(0, 80),
     staff: author.staff,
     body: body.trim(),
     createdAt: serverTimestamp(),
   });
-  batch.update(doc(db, COL, id), { commentCount: increment(1) });
+  // lastCommentId: pravidla podle něj ověří, že se čítač mění spolu se skutečným komentářem
+  batch.update(doc(db, COL, id), { commentCount: increment(1), lastCommentId: ref.id });
   await batch.commit();
 }
 
 export async function deleteComment(id: string, commentId: string): Promise<void> {
   const batch = writeBatch(db);
   batch.delete(doc(db, COL, id, "comments", commentId));
-  batch.update(doc(db, COL, id), { commentCount: increment(-1) });
+  batch.update(doc(db, COL, id), { commentCount: increment(-1), lastCommentId: commentId });
   await batch.commit();
 }
