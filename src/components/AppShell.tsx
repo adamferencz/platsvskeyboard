@@ -44,8 +44,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 text-sm">
             {access === "ok" && profile && (
               <>
-                <span className="hidden text-zinc-300 sm:inline">{profile.displayName}</span>
-                <button onClick={() => void signOut()} className="rounded-md border border-white/15 px-3 py-1.5 hover:bg-white/10">
+                <span className="hidden text-zinc-300 sm:inline-flex items-center gap-1.5">
+                  {profile.displayName}
+                  {profile.isGuest && (
+                    <span className="rounded bg-emerald-500/20 text-emerald-300 text-[11px] px-1.5 py-0.5 border border-emerald-500/30 font-medium">
+                      Host
+                    </span>
+                  )}
+                </span>
+                <button onClick={() => void signOut()} className="rounded-md border border-white/15 px-3 py-1.5 hover:bg-white/10 cursor-pointer">
                   Odhlásit
                 </button>
               </>

@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { Kbd } from "@/components/Kbd";
 import { RequireAuth } from "@/components/RequireAuth";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, levelId } from "@/game/content/curriculum";
-import { useAuth } from "@/lib/auth/AuthContext";
-import { getProgress } from "@/lib/firestore/runs";
+import { GUEST_MODE_ENABLED, useAuth } from "@/lib/auth/AuthContext";
+import { getProgress, unlockAllGuestChapters, resetGuestProgress } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { gradeForCompletion } from "@/lib/grading";
 import { useHotkeys } from "@/lib/useHotkeys";
@@ -36,6 +36,7 @@ export default function HomePage() {
 
 function Landing() {
   const router = useRouter();
+  const { signInGuest } = useAuth();
   useHotkeys({ Enter: () => router.push("/prihlaseni") });
   return (
     <div className="py-16 text-center">
@@ -49,10 +50,24 @@ function Landing() {
         Nauč se psát všemi deseti tím, že budeš bránit školu před zombíky. Každý zombík nese písmeno nebo slovo — napiš ho a je po něm.
         Žebříček školy, tříd a na konci možnost nechat si to oznámkovat.
       </p>
-      <Link href="/prihlaseni" className="rounded-lg bg-emerald-600 px-6 py-3 text-lg font-semibold hover:bg-emerald-500">
-        Přihlásit se školním účtem
-        <Kbd>Enter</Kbd>
-      </Link>
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <Link href="/prihlaseni" className="rounded-lg bg-emerald-600 px-6 py-3 text-lg font-semibold hover:bg-emerald-500">
+          Přihlásit se školním účtem
+          <Kbd>Enter</Kbd>
+        </Link>
+        {GUEST_MODE_ENABLED && (
+        <button
+          type="button"
+          onClick={() => {
+            signInGuest();
+            router.push("/");
+          }}
+          className="rounded-lg border border-white/20 bg-zinc-800/90 px-5 py-3 text-base font-medium text-zinc-200 hover:bg-zinc-700 hover:text-white transition cursor-pointer"
+        >
+          🎮 Hrát jako host (offline)
+        </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -128,7 +143,7 @@ const BIOME_THEMES: Record<string, BiomeTheme> = {
 };
 
 function LevelMap() {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const router = useRouter();
   const [progress, setProgress] = useState<ProgressDoc | null | undefined>(undefined);
   const continueRef = useRef<HTMLAnchorElement>(null);
@@ -156,6 +171,42 @@ function LevelMap() {
 
   return (
     <div className="space-y-10">
+      {isGuest && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/40 p-4 text-emerald-200 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <span className="text-2xl">🎮</span>
+            <div>
+              <div className="font-semibold text-white">Režim hosta / Vývojářský režim</div>
+              <div className="text-xs text-emerald-300/80">
+                Hra běží offline bez Firebase, postup se ukládá lokálně v tomto prohlížeči.
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const updated = unlockAllGuestChapters();
+                setProgress(updated);
+              }}
+              className="rounded-lg bg-emerald-600/40 hover:bg-emerald-600/60 border border-emerald-400/40 px-3 py-1.5 text-xs font-semibold text-white transition active:scale-95 cursor-pointer"
+            >
+              🔓 Odemknout všechny kapitoly
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const updated = resetGuestProgress();
+                setProgress(updated);
+              }}
+              className="rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-300 transition active:scale-95 cursor-pointer"
+            >
+              🔄 Resetovat postup
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* World Map Header HUD */}
       <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-zinc-950 p-6 shadow-2xl">
         <div className="flex flex-wrap items-end justify-between gap-4">

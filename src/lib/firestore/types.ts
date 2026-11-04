@@ -13,6 +13,7 @@ export interface UserDoc {
   layout: Layout;
   createdAt: Timestamp;
   lastActiveAt: Timestamp;
+  isGuest?: boolean;
 }
 
 export interface AllowedUserDoc {

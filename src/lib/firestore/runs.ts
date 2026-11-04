@@ -6,7 +6,44 @@ import { CHAPTERS, ROUNDS_PER_CHAPTER, completionPercent, levelId } from "@/game
 import type { RunResult } from "@/game/types";
 import type { ProgressDoc, StatsDoc, UserDoc } from "./types";
 
+const GUEST_PROGRESS_KEY = "pvz_guest_progress";
+
+export function getGuestProgress(): ProgressDoc {
+  if (typeof window === "undefined") {
+    return { ...(emptyProgress() as ProgressDoc), updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp };
+  }
+  try {
+    const raw = localStorage.getItem(GUEST_PROGRESS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { ...(emptyProgress() as ProgressDoc), updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp };
+}
+
+export function saveGuestProgress(docData: ProgressDoc) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(GUEST_PROGRESS_KEY, JSON.stringify(docData));
+  } catch {}
+}
+
+export function unlockAllGuestChapters(): ProgressDoc {
+  const p = getGuestProgress();
+  p.unlockedChapter = CHAPTERS.length;
+  saveGuestProgress(p);
+  return p;
+}
+
+export function resetGuestProgress(): ProgressDoc {
+  const p = { ...(emptyProgress() as ProgressDoc), updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp };
+  saveGuestProgress(p);
+  return p;
+}
+
 export async function getProgress(uid: string): Promise<ProgressDoc | null> {
+  if (uid === "guest") {
+    return getGuestProgress();
+  }
+  // chybu nepolykat: saveRun by jinak počítal z prázdného postupu
   const snap = await getDoc(doc(db, "progress", uid));
   return snap.exists() ? (snap.data() as ProgressDoc) : null;
 }
@@ -47,13 +84,47 @@ function computeUnlockedChapter(levels: ProgressDoc["levels"]): number {
  * Pravidla Firestore hlídají tvar a meze; pravdu ověřuje až audit skript.
  */
 export async function saveRun(uid: string, profile: UserDoc, result: RunResult): Promise<{ progress: ProgressDoc; suspicious: string | null }> {
-  const year = schoolYearKey();
-  const cls = computeClassId(profile.gradYear, profile.track, year);
-  const prev = (await getProgress(uid)) ?? (emptyProgress() as ProgressDoc);
-
   const intervals: number[] = [];
   for (let i = 1; i < result.keystrokes.length; i++) intervals.push(result.keystrokes[i][0] - result.keystrokes[i - 1][0]);
   const suspicious = suspicionReason({ correct: result.correct, errors: result.errors, durationMs: result.durationMs, cpm: result.cpm, intervalsMs: intervals });
+
+  if (uid === "guest" || profile.isGuest) {
+    const prev = getGuestProgress();
+    const levels = { ...prev.levels };
+    const before = levels[result.levelId];
+    levels[result.levelId] = {
+      stars: Math.max(before?.stars ?? 0, result.stars) as 0 | 1 | 2 | 3,
+      bestCpm: Math.max(before?.bestCpm ?? 0, result.cpm),
+      attempts: (before?.attempts ?? 0) + 1,
+    };
+    const completedRounds = Object.values(levels).filter((l) => l.stars > 0).length;
+
+    const keyStats = { ...prev.keyStats };
+    for (const [k, s] of Object.entries(result.keyStats)) {
+      keyStats[k] = { hits: s.hits, misses: s.misses };
+    }
+
+    const progress: ProgressDoc = {
+      levels,
+      completedRounds,
+      courseCompletion: completionPercent(completedRounds),
+      unlockedChapter: Math.max(prev.unlockedChapter, computeUnlockedChapter(levels)),
+      bestCpm: Math.max(prev.bestCpm, suspicious ? 0 : result.cpm),
+      bestNetCpm: Math.max(prev.bestNetCpm, suspicious ? 0 : result.netCpm),
+      totalRuns: prev.totalRuns + 1,
+      totalMinutes: Math.round((prev.totalMinutes + result.durationMs / 60000) * 100) / 100,
+      totalScore: prev.totalScore + (suspicious ? 0 : result.score),
+      keyStats,
+      updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp,
+    };
+
+    saveGuestProgress(progress);
+    return { progress, suspicious };
+  }
+
+  const year = schoolYearKey();
+  const cls = computeClassId(profile.gradYear, profile.track, year);
+  const prev = (await getProgress(uid)) ?? (emptyProgress() as ProgressDoc);
 
   const levels = { ...prev.levels };
   const before = levels[result.levelId];
@@ -140,6 +211,7 @@ export async function saveZenPractice(
   result: RunResult,
 ): Promise<{ progress: ProgressDoc; suspicious: null }> {
   const prev = (await getProgress(uid)) ?? (emptyProgress() as ProgressDoc);
+  const guest = uid === "guest";
 
   const keyStats = { ...prev.keyStats };
   for (const [k, s] of Object.entries(result.keyStats)) {
@@ -160,6 +232,12 @@ export async function saveZenPractice(
     keyStats,
   };
 
+  if (guest) {
+    // host hraje offline: postup jen do prohlížeče
+    const local = { ...progress, updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp };
+    saveGuestProgress(local);
+    return { progress: local, suspicious: null };
+  }
   await setDoc(doc(db, "progress", uid), { ...progress, updatedAt: serverTimestamp() });
 
   return { progress: { ...progress, updatedAt: serverTimestamp() as unknown as Timestamp }, suspicious: null };
