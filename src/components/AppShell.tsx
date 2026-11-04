@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { isTeacherRole } from "@/lib/firestore/types";
 
 const NAV = [
   { href: "/", label: "Mapa" },
@@ -13,7 +14,7 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { access, profile, role, signOut } = useAuth();
   const path = usePathname();
-  const isTeacher = role === "teacher" || role === "admin";
+  const isTeacher = isTeacherRole(role);
   const inGame = path.startsWith("/hra");
 
   return (

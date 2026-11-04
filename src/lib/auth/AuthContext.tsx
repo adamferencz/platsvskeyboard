@@ -18,7 +18,7 @@ import {
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { auth } from "@/lib/firebase/client";
 import { ensureUserDoc, getAllowedUser } from "@/lib/firestore/user";
-import type { Role, UserDoc } from "@/lib/firestore/types";
+import { SUPERADMIN_EMAIL, type Role, type UserDoc } from "@/lib/firestore/types";
 import { isSchoolEmail } from "@/lib/schoolYear";
 
 export type AccessState =
@@ -127,8 +127,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const provider = (await u.getIdTokenResult()).signInProvider;
     const allowed = await getAllowedUser(u.email);
     const school = isSchoolEmail(u.email);
+    // superadmin má přístup i bez záznamu ve whitelistu (pravidla ho poznají podle e-mailu)
+    const superAdmin = u.email?.toLowerCase() === SUPERADMIN_EMAIL && u.emailVerified;
     if (stale()) return;
-    if (!allowed && !school) {
+    if (!allowed && !school && !superAdmin) {
       setAccess("forbidden");
       return;
     }
@@ -139,7 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const userDoc = await ensureUserDoc(u);
     if (stale()) return;
-    setRole(allowed?.role ?? "student");
+    setRole(superAdmin ? "superadmin" : (allowed?.role ?? "student"));
     setProfile(userDoc);
     setAccess("ok");
   }, []);

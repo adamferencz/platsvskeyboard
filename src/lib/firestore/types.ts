@@ -2,7 +2,13 @@ import type { Timestamp } from "firebase/firestore";
 import type { Track } from "@/lib/schoolYear";
 import type { KeyStat } from "@/game/content/words";
 
-export type Role = "student" | "teacher" | "admin";
+export type Role = "student" | "teacher" | "admin" | "superadmin";
+
+/** Pevně daný superadmin (stejný jako superAdminEmail() ve firestore.rules). */
+export const SUPERADMIN_EMAIL = "garrukaf@gmail.com";
+
+export const isAdminRole = (r: Role) => r === "admin" || r === "superadmin";
+export const isTeacherRole = (r: Role) => r === "teacher" || isAdminRole(r);
 export type Layout = "qwertz" | "qwerty";
 
 export interface UserDoc {

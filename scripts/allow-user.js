@@ -20,6 +20,7 @@ async function main() {
     return;
   }
   if (args[0] === "--remove") {
+    if (args[1].toLowerCase() === "garrukaf@gmail.com") throw new Error("Superadmina nejde odebrat (je pevně ve firestore.rules).");
     await db.collection("allowedUsers").doc(args[1].toLowerCase()).delete();
     return console.log(`Odebrán ${args[1]}`);
   }
@@ -28,7 +29,9 @@ async function main() {
   const role = args[1] || "teacher";
   const displayName = args[2] || "";
   if (!email.includes("@")) throw new Error("První argument musí být e-mail.");
-  if (!["teacher", "admin"].includes(role)) throw new Error("Role musí být teacher nebo admin.");
+  if (!["teacher", "admin", "superadmin"].includes(role)) throw new Error("Role musí být teacher, admin nebo superadmin.");
+  // superadmin je jen jeden a jeho práva drží firestore.rules; záznam tady slouží pro přehled ve správě
+  if (role === "superadmin" && email !== "garrukaf@gmail.com") throw new Error("Superadmin je jen garrukaf@gmail.com (pevně ve firestore.rules).");
 
   await db.collection("allowedUsers").doc(email).set(
     { role, displayName, createdAt: admin.firestore.FieldValue.serverTimestamp() },
