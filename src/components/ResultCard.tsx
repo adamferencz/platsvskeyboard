@@ -31,6 +31,41 @@ export function ResultCard({
   onMap,
   className,
 }: Props) {
+  const badges: { icon: string; title: string; desc: string; style: string }[] = [];
+  if (result.won) {
+    if (result.accuracy === 100 && result.correct >= 15) {
+      badges.push({
+        icon: "🎯",
+        title: "Odstřelovač",
+        desc: "100% přesnost bez jediné chyby",
+        style: "border-emerald-500/40 bg-emerald-950/40 text-emerald-200",
+      });
+    }
+    if (result.livesLost === 0) {
+      badges.push({
+        icon: "🛡️",
+        title: "Nedotknutelný",
+        desc: "Vítězství bez ztráty života",
+        style: "border-sky-500/40 bg-sky-950/40 text-sky-200",
+      });
+    }
+    if (result.netCpm >= 200) {
+      badges.push({
+        icon: "⚡",
+        title: "Bleskové prsty",
+        desc: `Skvělé tempo (${result.netCpm} ČÚ/min)`,
+        style: "border-amber-500/40 bg-amber-950/40 text-amber-200",
+      });
+    }
+    if (result.maxCombo >= 15) {
+      badges.push({
+        icon: "🔥",
+        title: "Kombo mistr",
+        desc: `Série ${result.maxCombo} slov bez chyby`,
+        style: "border-rose-500/40 bg-rose-950/40 text-rose-200",
+      });
+    }
+  }
   const worst = Object.entries(result.keyStats)
     .filter(([, s]) => s.misses > 0)
     .sort((a, b) => b[1].misses - a[1].misses)
@@ -92,6 +127,27 @@ export function ResultCard({
         <Stat label="Čas" value={`${Math.round(result.durationMs / 1000)} s`} />
       </dl>
 
+      {badges.length > 0 && (
+        <div className="mt-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+            Získaná ocenění za výkon
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {badges.map((b) => (
+              <div
+                key={b.title}
+                className={`flex items-center gap-2.5 rounded-xl border p-2.5 backdrop-blur-sm ${b.style}`}
+              >
+                <span className="text-2xl">{b.icon}</span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold leading-tight">{b.title}</span>
+                  <span className="text-[11px] opacity-80 truncate">{b.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {worst.length > 0 && (
         <p className="mt-4 text-sm text-zinc-300">
           Nejvíc chyb:{" "}

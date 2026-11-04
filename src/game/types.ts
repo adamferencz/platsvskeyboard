@@ -61,5 +61,7 @@ export interface HudState {
   boss: { hp: number; maxHp: number } | null;
   expectedChar?: string | null;
   muted?: boolean;
+  liveCpm?: number;
+  liveAccuracy?: number;
 }
 

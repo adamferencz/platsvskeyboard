@@ -61,8 +61,10 @@ Zásady:
 
 ## Přihlášení
 
-Fáze 1: školní e-mail `@ghb.cz` + heslo (nutné ověření e-mailu), Google pro učitele. Kdo je mimo doménu, musí být v kolekci `allowedUsers` (`npm run allow`).
-Fáze 2: Microsoft (Entra ID, single-tenant) — postup je v interních podkladech.
+Hlavní cesta: **školní účet Microsoft** (Entra ID, jednotenantní aplikace v tenantu `ghb.cz`, Firebase provider `microsoft.com`). Tenant jde přepsat v `NEXT_PUBLIC_MS_TENANT`. Kdo má z fáze 1 účet s heslem na stejný e-mail, přihlásí se jednou heslem a Microsoft se k účtu připojí (`linkWithCredential`), postup zůstane.
+
+Záloha: školní e-mail `@ghb.cz` + heslo (nutné ověření e-mailu), Google pro učitele. Kdo je mimo doménu, musí být v kolekci `allowedUsers` (`npm run allow`).
+Postup registrace v Entra ID a zapnutí ve Firebase je v interních podkladech.
 
 **Admini a testovací účty.** Role jsou v `allowedUsers`: `teacher` vidí správu školy (`/ucitel`), `admin` navíc spravuje seznam učitelů a výjimek a zakládá **testovací účty** (záložka *Testovací účty*). Testovací účet je studentský účet `…@pvk-test.example.com` s heslem, které admin vygeneruje. E-mail se neověřuje a účet se nepočítá do žebříčků (`test: true` v `allowedUsers`, `users` i `stats`). *Vypnout* smaže jen výjimku z `allowedUsers`, takže se účet už nepřihlásí. Záznam ve Firebase Auth a data zůstanou. Prvního admina přidáš skriptem `npm run allow -- email admin "Jméno"`, další už v aplikaci.
 

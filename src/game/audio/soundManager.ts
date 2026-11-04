@@ -631,6 +631,36 @@ export class SoundManager {
       }, (n.start + n.dur + 0.05) * 1000);
     }
   }
-}
+  /**
+   * Krátký výstražný tón při kritickém přiblížení zombíka k domu.
+   */
+  playDangerWarning(): void {
+    if (this.muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx || !this.masterGain) return;
 
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(110, t + 0.22);
+
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(0.2, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(t);
+    osc.stop(t + 0.25);
+
+    setTimeout(() => {
+      osc.disconnect();
+      gain.disconnect();
+    }, 300);
+  }
+}
 export const soundManager = new SoundManager();

@@ -15,6 +15,7 @@ export interface UserDoc {
   test?: boolean;
   createdAt: Timestamp;
   lastActiveAt: Timestamp;
+  isGuest?: boolean;
 }
 
 export interface AllowedUserDoc {

@@ -260,8 +260,8 @@ export default function GameMount({
             )}
           </div>
 
-          {/* Center: Dedicated Arcade Combo Meter */}
-          <div className="flex flex-col items-center justify-center pt-1">
+          {/* Center: Dedicated Arcade Combo Meter & Live Speedometer */}
+          <div className="flex flex-col items-center justify-center gap-1.5 pt-1">
             {combo > 0 && (
               <div
                 key={combo}
@@ -284,6 +284,45 @@ export default function GameMount({
                     ? `✨ KOMBO x${combo}`
                     : `KOMBO x${combo}`}
                 </span>
+              </div>
+            )}
+
+            {/* Živý tachometr: CPM a Přesnost */}
+            {(hud?.liveCpm !== undefined || hud?.liveAccuracy !== undefined) && (
+              <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-black/65 px-3.5 py-1 text-xs backdrop-blur-md shadow-lg">
+                <div className="flex items-center gap-1 font-mono font-bold">
+                  <span className="text-zinc-400 text-[11px]">⚡</span>
+                  <span
+                    className={`tabular-nums ${
+                      playerCpm > 0 && (hud?.liveCpm ?? 0) > playerCpm
+                        ? "text-amber-300 font-black drop-shadow-[0_0_6px_rgba(245,158,11,0.6)]"
+                        : "text-emerald-300"
+                    }`}
+                  >
+                    {hud?.liveCpm ?? 0}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 normal-case font-medium">CPM</span>
+                  {playerCpm > 0 && (hud?.liveCpm ?? 0) > playerCpm && (
+                    <span className="animate-pulse rounded bg-amber-500/30 px-1 text-[9px] font-black text-amber-200 border border-amber-400/50">
+                      TOP
+                    </span>
+                  )}
+                </div>
+                <span className="text-white/20 font-mono">·</span>
+                <div className="flex items-center gap-1 font-mono font-bold">
+                  <span className="text-zinc-400 text-[11px]">🎯</span>
+                  <span
+                    className={`tabular-nums ${
+                      (hud?.liveAccuracy ?? 100) >= 95
+                        ? "text-emerald-300"
+                        : (hud?.liveAccuracy ?? 100) >= 90
+                        ? "text-amber-300"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {hud?.liveAccuracy ?? 100} %
+                  </span>
+                </div>
               </div>
             )}
           </div>
