@@ -9,8 +9,13 @@ export function gradeDocId(uid: string, year = schoolYearKey()) {
 }
 
 export async function getMyGrade(uid: string, year = schoolYearKey()): Promise<GradeDoc | null> {
-  const snap = await getDoc(doc(db, "grades", gradeDocId(uid, year)));
-  return snap.exists() ? (snap.data() as GradeDoc) : null;
+  if (uid === "guest") return null;
+  try {
+    const snap = await getDoc(doc(db, "grades", gradeDocId(uid, year)));
+    return snap.exists() ? (snap.data() as GradeDoc) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Student požádá o zapsání známky podle aktuálního % kurzu. */

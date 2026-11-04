@@ -24,11 +24,46 @@ export type AccessState =
   | "forbidden" // přihlášen, ale není ze školy ani na whitelistu
   | "ok";
 
+const GUEST_STORAGE_KEY = "pvz_guest_session";
+
+/**
+ * Režim hosta (#38) je pro lokální vývoj a testování: obchází přihlášení i whitelist,
+ * proto v produkci jen s výslovným NEXT_PUBLIC_GUEST_MODE=1.
+ */
+export const GUEST_MODE_ENABLED =
+  process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_GUEST_MODE === "1";
+
+function makeGuestUser(): User {
+  return {
+    uid: "guest",
+    email: "host@demo.local",
+    displayName: "Host / Vývojář",
+    emailVerified: true,
+    isAnonymous: true,
+    providerData: [],
+  } as unknown as User;
+}
+
+function makeGuestProfile(): UserDoc {
+  return {
+    email: "host@demo.local",
+    displayName: "Host / Vývojář",
+    gradYear: 2027,
+    track: "A",
+    layout: "qwertz",
+    createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as UserDoc["createdAt"],
+    lastActiveAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as UserDoc["lastActiveAt"],
+    isGuest: true,
+  };
+}
+
 interface AuthValue {
   user: User | null;
   profile: UserDoc | null;
   role: Role;
   access: AccessState;
+  isGuest: boolean;
+  signInGuest: () => void;
   refreshProfile: () => Promise<void>;
   signInGoogle: () => Promise<void>;
   signInEmail: (email: string, password: string) => Promise<void>;
@@ -47,6 +82,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [access, setAccess] = useState<AccessState>("loading");
 
   const evaluate = useCallback(async (u: User | null) => {
+    if (GUEST_MODE_ENABLED && typeof window !== "undefined" && localStorage.getItem(GUEST_STORAGE_KEY) === "true") {
+      setUser(makeGuestUser());
+      setProfile(makeGuestProfile());
+      setRole("student");
+      setAccess("ok");
+      return;
+    }
+
     if (!u) {
       setUser(null);
       setProfile(null);
@@ -80,18 +123,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       role,
       access,
+      isGuest: profile?.isGuest ?? user?.uid === "guest",
+      signInGuest: () => {
+        if (!GUEST_MODE_ENABLED) return;
+        if (typeof window !== "undefined") {
+          localStorage.setItem(GUEST_STORAGE_KEY, "true");
+        }
+        setUser(makeGuestUser());
+        setProfile(makeGuestProfile());
+        setRole("student");
+        setAccess("ok");
+      },
       refreshProfile: async () => {
-        if (user) setProfile(await ensureUserDoc(user));
+        if (user?.uid === "guest") {
+          setProfile(makeGuestProfile());
+        } else if (user) {
+          setProfile(await ensureUserDoc(user));
+        }
       },
       signInGoogle: async () => {
+        if (typeof window !== "undefined") localStorage.removeItem(GUEST_STORAGE_KEY);
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: "select_account" });
         await signInWithPopup(auth, provider);
       },
       signInEmail: async (email, password) => {
+        if (typeof window !== "undefined") localStorage.removeItem(GUEST_STORAGE_KEY);
         await signInWithEmailAndPassword(auth, email.trim(), password);
       },
       registerEmail: async (email, password) => {
+        if (typeof window !== "undefined") localStorage.removeItem(GUEST_STORAGE_KEY);
         const e = email.trim().toLowerCase();
         if (!isSchoolEmail(e) && !(await getAllowedUser(e))) {
           throw new Error(`Registrovat se dá jen školním e-mailem @${process.env.NEXT_PUBLIC_SCHOOL_DOMAIN ?? "ghb.cz"}.`);
@@ -106,7 +167,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (auth.currentUser) await sendEmailVerification(auth.currentUser);
       },
       signOut: async () => {
-        await fbSignOut(auth);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(GUEST_STORAGE_KEY);
+        }
+        try {
+          await fbSignOut(auth);
+        } catch {
+          // ignorujeme chybu pokud nebyl přihlášen přes Firebase
+        }
+        setUser(null);
+        setProfile(null);
+        setRole("student");
+        setAccess("anonymous");
       },
     }),
     [user, profile, role, access],

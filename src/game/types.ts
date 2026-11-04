@@ -62,5 +62,6 @@ export interface HudState {
   expectedChar?: string | null;
   muted?: boolean;
   liveCpm?: number;
+  liveAccuracy?: number;
 }
 

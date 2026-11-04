@@ -632,7 +632,7 @@ export class SoundManager {
     }
   }
   /**
-   * Kr�tk� v�stra�n� t�n p�i kritick�m p�ibl�en� zomb�ka k domu.
+   * Krátký výstražný tón při kritickém přiblížení zombíka k domu.
    */
   playDangerWarning(): void {
     if (this.muted) return;
