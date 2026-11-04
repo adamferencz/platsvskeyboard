@@ -1,6 +1,6 @@
 import { deleteApp, initializeApp } from "firebase/app";
 import { createUserWithEmailAndPassword, inMemoryPersistence, initializeAuth, signOut } from "firebase/auth";
-import { deleteDoc, doc, getDoc, getFirestore, serverTimestamp, setDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, documentId, getDocs, getFirestore, query, serverTimestamp, setDoc, where } from "firebase/firestore";
 import { db, firebaseConfig } from "@/lib/firebase/client";
 import type { Track } from "@/lib/schoolYear";
 
@@ -46,7 +46,9 @@ export async function createTestAccount(input: NewTestAccount): Promise<{ email:
   if (input.password.length < 6) throw new Error("Heslo musí mít aspoň 6 znaků.");
 
   const allowedRef = doc(db, "allowedUsers", email);
-  if ((await getDoc(allowedRef)).exists()) throw new Error(`Účet ${email} už existuje.`);
+  // get cizího dokumentu pravidla nepovolují (jen vlastní e-mail), list ano (isTeacher)
+  const existing = await getDocs(query(collection(db, "allowedUsers"), where(documentId(), "==", email)));
+  if (!existing.empty) throw new Error(`Účet ${email} už existuje.`);
 
   await setDoc(allowedRef, {
     role: "student",
