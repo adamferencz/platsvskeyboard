@@ -99,6 +99,7 @@ export async function saveRun(uid: string, profile: UserDoc, result: RunResult):
     totalMinutes: progress.totalMinutes,
     runs: runsCount,
     avgAccuracy,
+    ...(profile.test ? { test: true } : {}),
   };
 
   const batch = writeBatch(db);

@@ -16,7 +16,7 @@ async function main() {
     const snap = await db.collection("allowedUsers").get();
     if (snap.empty) return console.log('Whitelist je prázdný. Přidej: npm run allow -- email role "Jméno"');
     console.log("Whitelist:");
-    snap.docs.forEach((d) => console.log(`  ${d.id.padEnd(34)} ${String(d.data().role).padEnd(8)} ${d.data().displayName || ""}`));
+    snap.docs.forEach((d) => console.log(`  ${d.id.padEnd(34)} ${String(d.data().role).padEnd(8)} ${d.data().displayName || ""}${d.data().test ? "  [test]" : ""}`));
     return;
   }
   if (args[0] === "--remove") {

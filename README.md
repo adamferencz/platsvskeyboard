@@ -64,6 +64,8 @@ Zásady:
 Fáze 1: školní e-mail `@ghb.cz` + heslo (nutné ověření e-mailu), Google pro učitele. Kdo je mimo doménu, musí být v kolekci `allowedUsers` (`npm run allow`).
 Fáze 2: Microsoft (Entra ID, single-tenant) — postup je v interních podkladech.
 
+**Admini a testovací účty.** Role jsou v `allowedUsers`: `teacher` vidí správu školy (`/ucitel`), `admin` navíc spravuje seznam učitelů a výjimek a zakládá **testovací účty** (záložka *Testovací účty*). Testovací účet je studentský účet `…@pvk-test.example.com` s heslem, které admin vygeneruje. E-mail se neověřuje a účet se nepočítá do žebříčků (`test: true` v `allowedUsers`, `users` i `stats`). *Vypnout* smaže jen výjimku z `allowedUsers`, takže se účet už nepřihlásí. Záznam ve Firebase Auth a data zůstanou. Prvního admina přidáš skriptem `npm run allow -- email admin "Jméno"`, další už v aplikaci.
+
 ## Datový model (Firestore)
 
 | Kolekce | Obsah |
@@ -73,7 +75,7 @@ Fáze 2: Microsoft (Entra ID, single-tenant) — postup je v interních podklade
 | `runs/{id}` | každé odehrané kolo včetně logu úhozů (pro audit) |
 | `stats/{uid}_{rok}` | agregát pro žebříčky (per školní rok, s třídou) |
 | `grades/{uid}_{rok}` | žádost o známku → potvrzení učitelem → zámek na rok |
-| `allowedUsers/{email}` | učitelé a výjimky |
+| `allowedUsers/{email}` | učitelé, admini, výjimky a testovací účty (`test: true`) |
 
 Třída se odvozuje z roku maturity v e-mailu (`2027anovak@ghb.cz` → maturita 2027) a z volby studia v profilu (A = osmileté, C/D = čtyřleté).
 

@@ -11,6 +11,8 @@ export interface UserDoc {
   gradYear: number | null;
   track: Track | null;
   layout: Layout;
+  /** testovací účet založený adminem; nepočítá se do žebříčků */
+  test?: boolean;
   createdAt: Timestamp;
   lastActiveAt: Timestamp;
 }
@@ -18,6 +20,9 @@ export interface UserDoc {
 export interface AllowedUserDoc {
   role: Role;
   displayName?: string;
+  /** testovací účet (role student), založený adminem v /ucitel */
+  test?: boolean;
+  createdBy?: string;
 }
 
 export interface LevelProgress {
@@ -54,6 +59,7 @@ export interface StatsDoc {
   totalMinutes: number;
   runs: number;
   avgAccuracy: number;
+  test?: boolean;
   lastRunAt: Timestamp;
 }
 

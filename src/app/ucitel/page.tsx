@@ -1,11 +1,12 @@
 "use client";
 
-import { collection, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { useCallback, useEffect, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { db } from "@/lib/firebase/client";
 import { listGradeRequests, recordGrade, rejectGrade } from "@/lib/firestore/grades";
+import { TestAccounts } from "@/components/TestAccounts";
 import type { AllowedUserDoc, GradeDoc, RunDoc } from "@/lib/firestore/types";
 import { schoolYearKey } from "@/lib/schoolYear";
 
@@ -21,7 +22,9 @@ export default function TeacherPage() {
 
 function Teacher() {
   const { user, role } = useAuth();
-  const [tab, setTab] = useState<"grades" | "suspicious" | "staff">("grades");
+  const [tab, setTab] = useState<"grades" | "suspicious" | "staff" | "tests">("grades");
+  const isAdmin = role === "admin";
+  const myEmail = (user?.email ?? "").toLowerCase();
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold">Správa školy</h1>
@@ -31,6 +34,7 @@ function Teacher() {
             ["grades", "Žádosti o známku"],
             ["suspicious", "Podezřelé běhy"],
             ["staff", "Učitelé a výjimky"],
+            ...(isAdmin ? ([["tests", "Testovací účty"]] as const) : []),
           ] as const
         ).map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} className={`rounded-full px-4 py-1.5 ${tab === k ? "bg-emerald-600 font-semibold" : "bg-zinc-800 hover:bg-zinc-700"}`}>
@@ -40,7 +44,8 @@ function Teacher() {
       </div>
       {tab === "grades" && <Grades teacherEmail={user?.email ?? ""} />}
       {tab === "suspicious" && <Suspicious />}
-      {tab === "staff" && <Staff isAdmin={role === "admin"} />}
+      {tab === "staff" && <Staff isAdmin={isAdmin} myEmail={myEmail} />}
+      {tab === "tests" && isAdmin && <TestAccounts adminEmail={myEmail} />}
     </div>
   );
 }
@@ -168,14 +173,14 @@ function Suspicious() {
   );
 }
 
-function Staff({ isAdmin }: { isAdmin: boolean }) {
+function Staff({ isAdmin, myEmail }: { isAdmin: boolean; myEmail: string }) {
   const [rows, setRows] = useState<(AllowedUserDoc & { email: string })[] | null>(null);
   const [email, setEmail] = useState("");
   const [roleNew, setRoleNew] = useState<"teacher" | "admin">("teacher");
   const [err, setErr] = useState<string | null>(null);
   const load = useCallback(async () => {
     const snap = await getDocs(collection(db, "allowedUsers"));
-    setRows(snap.docs.map((d) => ({ email: d.id, ...(d.data() as AllowedUserDoc) })));
+    setRows(snap.docs.map((d) => ({ email: d.id, ...(d.data() as AllowedUserDoc) })).filter((r) => !r.test));
   }, []);
   useEffect(() => {
     void load();
@@ -184,8 +189,21 @@ function Staff({ isAdmin }: { isAdmin: boolean }) {
   async function add() {
     setErr(null);
     try {
-      await setDoc(doc(db, "allowedUsers", email.trim().toLowerCase()), { role: roleNew, createdAt: serverTimestamp() }, { merge: true });
+      const e = email.trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) throw new Error("Neplatný e-mail.");
+      await setDoc(doc(db, "allowedUsers", e), { role: roleNew, createdAt: serverTimestamp() }, { merge: true });
       setEmail("");
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    }
+  }
+
+  async function remove(target: string) {
+    if (!confirm(`Odebrat ${target} ze seznamu? Ztratí přístup do správy (a pokud nemá školní e-mail, i do aplikace).`)) return;
+    setErr(null);
+    try {
+      await deleteDoc(doc(db, "allowedUsers", target));
       await load();
     } catch (e) {
       setErr((e as Error).message);
@@ -202,7 +220,14 @@ function Staff({ isAdmin }: { isAdmin: boolean }) {
           {rows.map((r) => (
             <li key={r.email} className="flex items-center justify-between px-3 py-2">
               <span>{r.email}</span>
-              <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs uppercase">{r.role}</span>
+              <span className="flex items-center gap-2">
+                <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs uppercase">{r.role}</span>
+                {isAdmin && r.email !== myEmail && (
+                  <button onClick={() => void remove(r.email)} className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10">
+                    Odebrat
+                  </button>
+                )}
+              </span>
             </li>
           ))}
         </ul>
