@@ -105,6 +105,8 @@ export class LevelScene extends Phaser.Scene {
   private hudTimer = 0;
   private spawnEvent?: Phaser.Time.TimerEvent;
   private ground!: Phaser.GameObjects.Graphics;
+  private dangerOverlays: Phaser.GameObjects.Rectangle[] = [];
+  private lastDangerWarningSoundAt = 0;
 
   constructor() {
     super("Level");
@@ -154,6 +156,14 @@ export class LevelScene extends Phaser.Scene {
     });
 
     this.drawBackground();
+    this.dangerOverlays = [];
+    for (let i = 0; i < LANES; i++) {
+      const rect = this.add
+        .rectangle(0, LANE_TOP + i * LANE_H, W, LANE_H, 0xff0000, 0)
+        .setOrigin(0, 0)
+        .setDepth(2);
+      this.dangerOverlays.push(rect);
+    }
     const house = this.add.image(-10, LANE_TOP + LANES * LANE_H + 4, TEX.house).setOrigin(0, 1).setDepth(1);
     house.setScale(Math.min(250 / house.width, (LANES * LANE_H) / house.height));
 
@@ -1183,6 +1193,31 @@ export class LevelScene extends Phaser.Scene {
     this.showFloatingText(HOUSE_X + 50, LANE_TOP + LANE_H, "+1 ❤", "#e74c3c");
   }
 
+  private updateDangerWarnings() {
+    const DANGER_X = HOUSE_X + 220;
+    let anyDanger = false;
+    for (let lane = 0; lane < LANES; lane++) {
+      const overlay = this.dangerOverlays[lane];
+      if (!overlay) continue;
+      const threatening = this.zombies.some(
+        (z) => !z.dead && z.lane === lane && z.container.x <= DANGER_X
+      );
+      if (threatening) {
+        anyDanger = true;
+        // Jemně pulzující červený nádech na ohrožené dráze
+        const alpha = 0.12 + Math.sin(this.time.now / 140) * 0.08;
+        overlay.setFillStyle(0xff0000, alpha);
+      } else {
+        overlay.setFillStyle(0xff0000, 0);
+      }
+    }
+
+    if (anyDanger && !this.data_.zenMode && this.time.now - this.lastDangerWarningSoundAt > 3500) {
+      this.lastDangerWarningSoundAt = this.time.now;
+      soundManager.playDangerWarning();
+    }
+  }
+
   private updateTowers() {
     for (const tw of this.towers) {
       if (this.time.now >= tw.expiresAt) {
@@ -1397,6 +1432,7 @@ export class LevelScene extends Phaser.Scene {
       z.container.x -= z.speed * dt * speedMul;
       if (z.container.x <= HOUSE_X) this.reachedHouse(z);
     }
+    this.updateDangerWarnings();
     this.updateTowers();
     this.updateCrosshair();
     this.hudTimer += delta;
@@ -1577,8 +1613,10 @@ export class LevelScene extends Phaser.Scene {
         }
       : null;
 
+    // během právě běžící pauzy čas nepřibývá (jinak by CPM v pauze klesalo)
+    const activePauseMs = this.isPaused && this.pauseStartAt > 0 ? performance.now() - this.pauseStartAt : 0;
     const durationMs = this.started
-      ? Math.max(1, Math.round(performance.now() - this.startAt - this.totalPauseDurationMs))
+      ? Math.max(1, Math.round(performance.now() - this.startAt - this.totalPauseDurationMs - activePauseMs))
       : 0;
     const totalKeystrokes = this.correct + this.errors;
     const liveAccuracy = totalKeystrokes > 0

@@ -105,6 +105,7 @@ describe("SoundManager", () => {
       sm.playDefeat();
       sm.playComboMilestone(5);
       sm.playComboMilestone(10);
+    sm.playDangerWarning();
       sm.playComboMilestone(25);
     });
   });
