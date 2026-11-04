@@ -43,13 +43,9 @@ export async function getProgress(uid: string): Promise<ProgressDoc | null> {
   if (uid === "guest") {
     return getGuestProgress();
   }
-  try {
-    const snap = await getDoc(doc(db, "progress", uid));
-    return snap.exists() ? (snap.data() as ProgressDoc) : null;
-  } catch (e) {
-    console.warn("Chyba při čtení progresu z Firestore:", e);
-    return null;
-  }
+  // chybu nepolykat: saveRun by jinak počítal z prázdného postupu
+  const snap = await getDoc(doc(db, "progress", uid));
+  return snap.exists() ? (snap.data() as ProgressDoc) : null;
 }
 
 export async function getStats(uid: string, year = schoolYearKey()): Promise<StatsDoc | null> {
@@ -215,6 +211,7 @@ export async function saveZenPractice(
   result: RunResult,
 ): Promise<{ progress: ProgressDoc; suspicious: null }> {
   const prev = (await getProgress(uid)) ?? (emptyProgress() as ProgressDoc);
+  const guest = uid === "guest";
 
   const keyStats = { ...prev.keyStats };
   for (const [k, s] of Object.entries(result.keyStats)) {
@@ -235,6 +232,12 @@ export async function saveZenPractice(
     keyStats,
   };
 
+  if (guest) {
+    // host hraje offline: postup jen do prohlížeče
+    const local = { ...progress, updatedAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } as unknown as Timestamp };
+    saveGuestProgress(local);
+    return { progress: local, suspicious: null };
+  }
   await setDoc(doc(db, "progress", uid), { ...progress, updatedAt: serverTimestamp() });
 
   return { progress: { ...progress, updatedAt: serverTimestamp() as unknown as Timestamp }, suspicious: null };

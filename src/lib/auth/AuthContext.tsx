@@ -26,6 +26,13 @@ export type AccessState =
 
 const GUEST_STORAGE_KEY = "pvz_guest_session";
 
+/**
+ * Režim hosta (#38) je pro lokální vývoj a testování: obchází přihlášení i whitelist,
+ * proto v produkci jen s výslovným NEXT_PUBLIC_GUEST_MODE=1.
+ */
+export const GUEST_MODE_ENABLED =
+  process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_GUEST_MODE === "1";
+
 function makeGuestUser(): User {
   return {
     uid: "guest",
@@ -75,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [access, setAccess] = useState<AccessState>("loading");
 
   const evaluate = useCallback(async (u: User | null) => {
-    if (typeof window !== "undefined" && localStorage.getItem(GUEST_STORAGE_KEY) === "true") {
+    if (GUEST_MODE_ENABLED && typeof window !== "undefined" && localStorage.getItem(GUEST_STORAGE_KEY) === "true") {
       setUser(makeGuestUser());
       setProfile(makeGuestProfile());
       setRole("student");
@@ -118,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       access,
       isGuest: profile?.isGuest ?? user?.uid === "guest",
       signInGuest: () => {
+        if (!GUEST_MODE_ENABLED) return;
         if (typeof window !== "undefined") {
           localStorage.setItem(GUEST_STORAGE_KEY, "true");
         }

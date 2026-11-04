@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Kbd } from "@/components/Kbd";
 import { RequireAuth } from "@/components/RequireAuth";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, levelId } from "@/game/content/curriculum";
-import { useAuth } from "@/lib/auth/AuthContext";
+import { GUEST_MODE_ENABLED, useAuth } from "@/lib/auth/AuthContext";
 import { getProgress, unlockAllGuestChapters, resetGuestProgress } from "@/lib/firestore/runs";
 import type { ProgressDoc } from "@/lib/firestore/types";
 import { gradeForCompletion } from "@/lib/grading";
@@ -55,6 +55,7 @@ function Landing() {
           Přihlásit se školním účtem
           <Kbd>Enter</Kbd>
         </Link>
+        {GUEST_MODE_ENABLED && (
         <button
           type="button"
           onClick={() => {
@@ -65,6 +66,7 @@ function Landing() {
         >
           🎮 Hrát jako host (offline)
         </button>
+        )}
       </div>
     </div>
   );
