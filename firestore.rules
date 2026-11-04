@@ -35,16 +35,26 @@ service cloud.firestore {
       return signedIn() && exists(/databases/$(database)/documents/allowedUsers/$(email()));
     }
 
+    // Superadmin: pevně daný účet s právy na vše. Nedá se odebrat ani změnit z aplikace,
+    // platí i bez záznamu v allowedUsers (měnit jde jen tady v pravidlech).
+    function superAdminEmail() {
+      return 'garrukaf@gmail.com';
+    }
+
+    function isSuperAdmin() {
+      return signedIn() && email() == superAdminEmail() && request.auth.token.email_verified == true;
+    }
+
     function isTeacher() {
-      return isStaff() && staffDoc().data.role in ['teacher', 'admin'];
+      return isSuperAdmin() || (isStaff() && staffDoc().data.role in ['teacher', 'admin', 'superadmin']);
     }
 
     function isAdmin() {
-      return isStaff() && staffDoc().data.role == 'admin';
+      return isSuperAdmin() || (isStaff() && staffDoc().data.role == 'admin');
     }
 
     function isAllowed() {
-      return isSchool() || isStaff();
+      return isSchool() || isStaff() || isSuperAdmin();
     }
 
     function isOwner(uid) {
@@ -56,7 +66,10 @@ service cloud.firestore {
     match /allowedUsers/{mail} {
       allow get: if signedIn() && mail == email();
       allow list: if isTeacher();
-      allow write: if isAdmin();
+      // superadmina nikdo z aplikace nezmění ani neodebere a další superadmin vzniknout nemůže
+      allow create, update: if isAdmin() && mail != superAdminEmail()
+        && request.resource.data.role in ['student', 'teacher', 'admin'];
+      allow delete: if isAdmin() && mail != superAdminEmail();
     }
 
     // ---------- uživatelé ----------

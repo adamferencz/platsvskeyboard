@@ -7,14 +7,14 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { db } from "@/lib/firebase/client";
 import { listGradeRequests, recordGrade, rejectGrade } from "@/lib/firestore/grades";
 import { TestAccounts } from "@/components/TestAccounts";
-import type { AllowedUserDoc, GradeDoc, RunDoc } from "@/lib/firestore/types";
+import { SUPERADMIN_EMAIL, isAdminRole, type AllowedUserDoc, type GradeDoc, type RunDoc } from "@/lib/firestore/types";
 import { schoolYearKey } from "@/lib/schoolYear";
 
 const SUBJECTS = ["IVT", "Informatika", "DIGI", "Písemná a elektronická komunikace", "Jiný"];
 
 export default function TeacherPage() {
   return (
-    <RequireAuth roles={["teacher", "admin"]}>
+    <RequireAuth roles={["teacher", "admin", "superadmin"]}>
       <Teacher />
     </RequireAuth>
   );
@@ -23,7 +23,7 @@ export default function TeacherPage() {
 function Teacher() {
   const { user, role } = useAuth();
   const [tab, setTab] = useState<"grades" | "suspicious" | "staff" | "tests">("grades");
-  const isAdmin = role === "admin";
+  const isAdmin = isAdminRole(role);
   const myEmail = (user?.email ?? "").toLowerCase();
   return (
     <div>
@@ -222,7 +222,7 @@ function Staff({ isAdmin, myEmail }: { isAdmin: boolean; myEmail: string }) {
               <span>{r.email}</span>
               <span className="flex items-center gap-2">
                 <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs uppercase">{r.role}</span>
-                {isAdmin && r.email !== myEmail && (
+                {isAdmin && r.email !== myEmail && r.email !== SUPERADMIN_EMAIL && r.role !== "superadmin" && (
                   <button onClick={() => void remove(r.email)} className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10">
                     Odebrat
                   </button>
