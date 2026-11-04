@@ -182,6 +182,95 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---------- nápady na vylepšení (/napady) ----------
+    // Navrhovat, hlasovat a komentovat může každý přihlášený; stav, řešitele a odkaz na PR mění učitel.
+
+    match /counters/{name} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && name == 'suggestions'
+        && request.resource.data.keys().hasOnly(['lastNumber'])
+        && request.resource.data.lastNumber == 1;
+      allow update: if isAllowed() && name == 'suggestions'
+        && request.resource.data.keys().hasOnly(['lastNumber'])
+        && request.resource.data.lastNumber == resource.data.lastNumber + 1;
+    }
+
+    function suggestionStatuses() {
+      return ['new', 'accepted', 'in_progress', 'done', 'rejected'];
+    }
+
+    function suggestionTextValid(d) {
+      return d.title is string && d.title.size() >= 3 && d.title.size() <= 120
+        && d.body is string && d.body.size() <= 4000
+        && d.category in ['napad', 'chyba', 'hra', 'obsah', 'vzhled'];
+    }
+
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // přidá / odebere právě svůj hlas a čítač posune o 1
+    function voteValid() {
+      let before = resource.data.voters.toSet();
+      let after = request.resource.data.voters.toSet();
+      let me = [request.auth.uid].toSet();
+      return changed().hasOnly(['voters', 'votes'])
+        && ((after.difference(before) == me && before.difference(after).size() == 0
+              && request.resource.data.votes == resource.data.votes + 1)
+          || (before.difference(after) == me && after.difference(before).size() == 0
+              && request.resource.data.votes == resource.data.votes - 1));
+    }
+
+    match /suggestions/{id} {
+      allow read: if isAllowed();
+      allow create: if isAllowed() && isOwner(request.resource.data.uid)
+        && request.resource.data.keys().hasOnly(['number', 'uid', 'authorName', 'classId', 'title', 'body',
+             'category', 'status', 'voters', 'votes', 'commentCount', 'assignee', 'link', 'createdAt', 'updatedAt'])
+        && suggestionTextValid(request.resource.data)
+        && request.resource.data.authorName is string && request.resource.data.authorName.size() <= 80
+        && request.resource.data.status == 'new'
+        && request.resource.data.voters.size() == 0 && request.resource.data.votes == 0
+        && request.resource.data.commentCount == 0
+        && request.resource.data.assignee == null && request.resource.data.link == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.number == getAfter(/databases/$(database)/documents/counters/suggestions).data.lastNumber;
+      allow update: if isAllowed() && (
+        voteValid()
+        // komentář přidán / smazán (batch spolu s dokumentem v podkolekci)
+        || (changed().hasOnly(['commentCount'])
+            && (request.resource.data.commentCount == resource.data.commentCount + 1
+                || request.resource.data.commentCount == resource.data.commentCount - 1))
+        // autor upraví text, dokud je návrh nový
+        || (isOwner(resource.data.uid) && resource.data.status == 'new'
+            && changed().hasOnly(['title', 'body', 'category', 'updatedAt'])
+            && suggestionTextValid(request.resource.data))
+        // tým: stav, řešitel, odkaz (a případně oprava textu)
+        || (isTeacher()
+            && changed().hasOnly(['status', 'assignee', 'link', 'title', 'body', 'category', 'updatedAt'])
+            && request.resource.data.status in suggestionStatuses()
+            && suggestionTextValid(request.resource.data)
+            && (request.resource.data.assignee == null
+                || (request.resource.data.assignee is string && request.resource.data.assignee.size() <= 80))
+            && (request.resource.data.link == null
+                || (request.resource.data.link is string && request.resource.data.link.matches('https://.{1,400}'))))
+      );
+      allow delete: if isTeacher()
+        || (isAllowed() && isOwner(resource.data.uid) && resource.data.status == 'new' && resource.data.commentCount == 0);
+
+      match /comments/{commentId} {
+        allow read: if isAllowed();
+        allow create: if isAllowed() && isOwner(request.resource.data.uid)
+          && request.resource.data.keys().hasOnly(['uid', 'authorName', 'staff', 'body', 'createdAt'])
+          && request.resource.data.staff == isTeacher()
+          && request.resource.data.authorName is string && request.resource.data.authorName.size() <= 80
+          && request.resource.data.body is string
+          && request.resource.data.body.size() >= 1 && request.resource.data.body.size() <= 2000
+          && request.resource.data.createdAt == request.time;
+        allow update: if false;
+        allow delete: if isTeacher() || (isAllowed() && isOwner(resource.data.uid));
+      }
+    }
+
     // ---------- konfigurace ----------
 
     match /config/{docId} {

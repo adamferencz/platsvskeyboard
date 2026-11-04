@@ -39,7 +39,7 @@ Podrobná pravidla (názvy větví, review, nasazení pravidel) jsou v `CLAUDE.m
 ## Jak je to poskládané
 
 ```text
-src/app/            stránky: / (mapa), /hra, /profil, /zebricek, /ucitel, /prihlaseni
+src/app/            stránky: / (mapa), /hra, /profil, /zebricek, /napady, /ucitel, /prihlaseni
 src/game/           herní jádro — Phaser, žádný React uvnitř
   scenes/           BootScene (textury), LevelScene (dráhy, zombíci, věže, boss)
   content/          curriculum.ts (kapitoly a klávesy), levels.ts (obtížnost), words.ts (generátor slov)
@@ -78,8 +78,15 @@ Postup registrace v Entra ID a zapnutí ve Firebase je v interních podkladech.
 | `stats/{uid}_{rok}` | agregát pro žebříčky (per školní rok, s třídou) |
 | `grades/{uid}_{rok}` | žádost o známku → potvrzení učitelem → zámek na rok |
 | `allowedUsers/{email}` | učitelé, admini, výjimky a testovací účty (`test: true`) |
+| `suggestions/{id}` | nápady na vylepšení (#N, kategorie, stav, hlasy `voters`/`votes`, řešitel, odkaz na PR) |
+| `suggestions/{id}/comments/{id}` | komentáře k návrhu (`staff: true` = odznak TÝM) |
+| `counters/suggestions` | čítač pořadových čísel návrhů |
 
 Třída se odvozuje z roku maturity v e-mailu (`2027anovak@ghb.cz` → maturita 2027) a z volby studia v profilu (A = osmileté, C/D = čtyřleté).
+
+## Nápady na vylepšení
+
+`/napady` — každý přihlášený může navrhnout vylepšení nebo nahlásit chybu, hlasovat ▲ a komentovat. Návrh prochází stavy **Nový → Schváleno → Ve vývoji → Hotovo** (nebo **Zamítnuto**). Záložka *Vývoj* je nástěnka po stavech: studenti vidí, na čem se pracuje, učitel/admin přetahuje karty mezi sloupci a v detailu doplní, kdo na tom dělá a odkaz na PR. Autor může svůj návrh upravit nebo smazat, dokud je ve stavu Nový.
 
 ## Známkování
 

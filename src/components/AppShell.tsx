@@ -8,6 +8,7 @@ import { isTeacherRole } from "@/lib/firestore/types";
 const NAV = [
   { href: "/", label: "Mapa" },
   { href: "/zebricek", label: "Žebříček" },
+  { href: "/napady", label: "Nápady" },
   { href: "/profil", label: "Profil" },
 ];
 
@@ -30,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${path === n.href ? "bg-white/10 font-semibold" : ""}`}
+                  className={`rounded-md px-3 py-1.5 hover:bg-white/10 ${(n.href === "/" ? path === "/" : path.startsWith(n.href)) ? "bg-white/10 font-semibold" : ""}`}
                 >
                   {n.label}
                 </Link>
