@@ -44,4 +44,4 @@ npm run deploy:rules   # firestore.rules + indexy
 
 ## Datový model
 
-`users`, `progress/{uid}`, `runs`, `stats/{uid}_{rok}`, `grades/{uid}_{rok}`, `allowedUsers/{email}` — popis v README. Školní rok `'2026-27'` počítá `src/lib/schoolYear.ts`; třída = rok maturity z e-mailu + studium (A 8leté, C/D 4leté).
+`users`, `progress/{uid}`, `runs`, `stats/{uid}_{rok}`, `grades/{uid}_{rok}`, `allowedUsers/{email}`, `suggestions` (+ `comments`, čítač `counters/suggestions`) — popis v README. Školní rok `'2026-27'` počítá `src/lib/schoolYear.ts`; třída = rok maturity z e-mailu + studium (A 8leté, C/D 4leté).
