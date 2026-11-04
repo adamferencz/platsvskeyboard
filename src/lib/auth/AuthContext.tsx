@@ -100,6 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Microsoft přihlášení narazilo na existující účet s heslem — po přihlášení heslem ho připojíme.
   const pendingLink = useRef<{ email: string; credential: AuthCredential } | null>(null);
   const [pendingLinkEmail, setPendingLinkEmail] = useState<string | null>(null);
+  // evaluate je async a volá se i ručně (po propojení účtů) — platí jen výsledek posledního volání
+  const evalSeq = useRef(0);
 
   const evaluate = useCallback(async (u: User | null) => {
     if (GUEST_MODE_ENABLED && typeof window !== "undefined" && localStorage.getItem(GUEST_STORAGE_KEY) === "true") {
@@ -111,17 +113,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (!u) {
+      evalSeq.current++;
       setUser(null);
       setProfile(null);
       setRole("student");
       setAccess("anonymous");
       return;
     }
+    const seq = ++evalSeq.current;
+    const stale = () => seq !== evalSeq.current;
     setUser(u);
     // stejný údaj jako request.auth.token.firebase.sign_in_provider ve firestore.rules
     const provider = (await u.getIdTokenResult()).signInProvider;
     const allowed = await getAllowedUser(u.email);
     const school = isSchoolEmail(u.email);
+    if (stale()) return;
     if (!allowed && !school) {
       setAccess("forbidden");
       return;
@@ -131,8 +137,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAccess("unverified");
       return;
     }
+    const userDoc = await ensureUserDoc(u);
+    if (stale()) return;
     setRole(allowed?.role ?? "student");
-    setProfile(await ensureUserDoc(u));
+    setProfile(userDoc);
     setAccess("ok");
   }, []);
 
