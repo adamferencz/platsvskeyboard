@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { isTeacherRole } from "@/lib/firestore/types";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { href: "/", label: "Mapa" },
@@ -47,6 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           )}
           <div className="flex items-center gap-3 text-sm">
+            <ThemeToggle />
             {access === "ok" && profile && (
               <>
                 <span className="hidden text-zinc-300 sm:inline-flex items-center gap-1.5">
