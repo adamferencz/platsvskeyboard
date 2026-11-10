@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { RequireAuth } from "@/components/RequireAuth";
 import { KeyboardHeatmap } from "@/components/KeyboardHeatmap";
+import { PlayCalendar } from "@/components/PlayCalendar";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { getMyGrade, requestGrade } from "@/lib/firestore/grades";
 import { getProgress } from "@/lib/firestore/runs";
@@ -307,6 +308,8 @@ function Profile() {
           </div>
         )}
       </section>
+
+      {user && <PlayCalendar uid={user.uid} totalMinutes={progress?.totalMinutes ?? 0} />}
 
       {/* Sekce: Heatmapa chybovosti na klávesnici */}
       <section>

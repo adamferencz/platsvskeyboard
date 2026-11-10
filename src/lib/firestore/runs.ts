@@ -5,6 +5,7 @@ import { suspicionReason } from "@/lib/scoring";
 import { CHAPTERS, ROUNDS_PER_CHAPTER, completionPercent, levelId } from "@/game/content/curriculum";
 import type { RunResult } from "@/game/types";
 import type { ProgressDoc, StatsDoc, UserDoc } from "./types";
+import { recordGuestActivity } from "./activity";
 
 const GUEST_PROGRESS_KEY = "pvz_guest_progress";
 
@@ -119,6 +120,7 @@ export async function saveRun(uid: string, profile: UserDoc, result: RunResult):
     };
 
     saveGuestProgress(progress);
+    recordGuestActivity(result.durationMs);
     return { progress, suspicious };
   }
 
