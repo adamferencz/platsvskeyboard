@@ -192,6 +192,7 @@ export default function GameMount({
       }`}
     >
       <div
+        data-keep-dark
         className={`relative aspect-video w-full ${
           isFullscreen ? "max-h-screen max-w-[calc(100vh*16/9)]" : ""
         }`}

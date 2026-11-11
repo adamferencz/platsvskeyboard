@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { RunResult } from "@/game/types";
 import { useHotkeys } from "@/lib/useHotkeys";
 import { Kbd } from "./Kbd";
+import { SpeedChart } from "./SpeedChart";
 
 /** ms po konci kola, kdy výsledková karta ignoruje klávesy */
 const ARM_MS = 700;
@@ -126,6 +127,8 @@ export function ResultCard({
         <Stat label="Chyby" value={result.errors} />
         <Stat label="Čas" value={`${Math.round(result.durationMs / 1000)} s`} />
       </dl>
+
+      <SpeedChart keystrokes={result.keystrokes} durationMs={result.durationMs} averageCpm={result.cpm} />
 
       {badges.length > 0 && (
         <div className="mt-4">
